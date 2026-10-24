@@ -6,14 +6,26 @@ name: ci
 # label, so it is never handed a deploy). Nothing here needs a secret or
 # touches a real device. Never GitHub's cloud runners (the owner's rule,
 # 2026-10-24: the house's code and data are checked on house compute only).
+#
+# Every `uses:` is pinned to a full commit SHA, with the tag it was in a
+# comment: a tag can be moved to other code, a SHA cannot. To bump one, read
+# the SHA of the new tag from https://api.github.com/repos/<owner>/<action>/git/ref/tags/<tag>
+# (for an annotated tag, follow the "tag" object to its commit).
 on:
   push:
     branches: ["**"]
   pull_request:
 
+# Nothing by default; each job asks for what it needs.
+permissions: {}
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
   # A release fast-forwards main to a dev commit CI has already passed: the
@@ -27,7 +39,7 @@ jobs:
     runs-on: ["{{PROJECT}}-ci"]
     timeout-minutes: 2
     permissions:
-      actions: read
+      actions: read     # ask the API whether this commit already passed
     outputs:
       green: ${{ steps.ask.outputs.green }}
     steps:
@@ -37,72 +49,90 @@ jobs:
         run: |
           set -uo pipefail
           green=false
-          if [ "${{ github.event_name }}" = push ] && [ "${{ github.ref }}" = refs/heads/main ]; then
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF" = refs/heads/main ]; then
             n=$(curl -fsS -m 20 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
-                  "${{ github.api_url }}/repos/${{ github.repository }}/actions/workflows/ci.yml/runs?head_sha=${{ github.sha }}&status=success&per_page=1" \
+                  "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&status=success&per_page=1" \
                 | python3 -c "import json,sys; print(json.load(sys.stdin).get('total_count', 0))" 2>/dev/null || echo 0)
             [ "${n:-0}" -gt 0 ] && green=true
           fi
           echo "green=$green" >> "$GITHUB_OUTPUT"
           echo "this commit already passed CI: $green"
 
+  # The house checks (scripts/check.sh): PII, commit identity, secrets across
+  # all of history, workflows, shell scripts, Dockerfiles. The same script the
+  # pre-push hook runs as `fast`, so a red here is never a surprise.
   hygiene:
     needs: seen
     if: needs.seen.outputs.green != 'true'
     runs-on: ["{{PROJECT}}-ci"]
-    timeout-minutes: 10
+    timeout-minutes: 15
+    permissions:
+      contents: read    # check out this private repo
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0              # gitleaks reads all of history
+          persist-credentials: false  # no later step pushes; leave no token on disk
 
-      - name: no personal data in tracked files
-        run: scripts/pii-scan.sh
-
-      - name: shell scripts parse and are shellcheck-clean
+      - name: house checks
+        env:
+          BEFORE: ${{ github.event.before }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
-          # --others so a script that has not been `git add`ed yet is still
-          # checked. Plain `git ls-files` lists only TRACKED files, which is
-          # EMPTY in a repo with no commits — so a brand-new project scaffolded
-          # from this template linted nothing and went green, at exactly the
-          # moment a first commit is most likely to carry a mistake. This is
-          # the same lesson scripts/pii-scan.sh already carries.
-          mapfile -t sh < <(git ls-files --cached --others --exclude-standard '*.sh' .githooks)
-          # An empty list is a FAILURE, not a skip: a linter that reports
-          # success having examined nothing is worse than no linter.
-          if [ ${#sh[@]} -eq 0 ]; then
-            echo "found no shell scripts to check — the file list is broken" >&2
-            exit 1
+          # The commits this run brings, for the identity check: a PR's
+          # commits, a push's new commits, or, for a new branch, its commits
+          # not yet on the default branch. (Unset, check.sh would read "not on
+          # any remote", which in a fresh checkout is nothing.)
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            range="$BASE..$HEAD_SHA"
+          elif [ -n "$BEFORE" ] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            range="$BEFORE..$HEAD_SHA"
+          elif [ "$GITHUB_REF" = "refs/heads/$DEFAULT_BRANCH" ]; then
+            # The default branch's first push, or a force-push past what this
+            # checkout knows: nothing to subtract, so every commit counts.
+            range="$HEAD_SHA"
+          else
+            range="$HEAD_SHA ^origin/$DEFAULT_BRANCH"
           fi
-          bash -n "${sh[@]}"
-          shellcheck "${sh[@]}"
+          CHECK_RANGE=$range scripts/check.sh full
 
   check:
     needs: seen
     if: needs.seen.outputs.green != 'true'
     runs-on: ["{{PROJECT}}-ci"]
     timeout-minutes: 15
+    permissions:
+      contents: read    # check out this private repo
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # TODO({{PROJECT}}): keep the stanza for this project's stack, delete the
-      # rest, and delete the no-op step below.
+      # rest, and delete the no-op step below. In a repo that publishes, outside
+      # PRs land here, so every command that runs this repo's code goes through
+      # scripts/sandbox.sh, and the install step, which needs the network and
+      # so cannot, runs no package's scripts (docs/publishing.md). A sandbox
+      # call keeps none of its writes: build and test in the same one.
       #
-      # - uses: actions/setup-python@v5
+      # - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
       #   with: { python-version: "3.12" }
       # - name: compile and test
       #   run: |
       #     set -euo pipefail
-      #     python -m compileall -q .
-      #     python -m unittest discover -s tests -v
+      #     python -m compileall -q .     # parses every file, runs none
+      #     {{SANDBOX}}python -m unittest discover -s tests -v
       #
-      # - uses: actions/setup-node@v4
+      # - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
       #   with: { node-version: "22" }
       # - name: build and test
       #   run: |
       #     set -euo pipefail
-      #     npm ci            # fails if package-lock.json and package.json disagree
-      #     npm run build --if-present
-      #     npm test --if-present
+      #     npm ci{{NPM_CI_FLAGS}}            # fails if package-lock.json and package.json disagree
+      #     {{SANDBOX}}sh -c 'npm run build --if-present && npm test --if-present'
 
       - name: no build configured yet
         run: |

@@ -1,0 +1,49 @@
+name: weekly
+
+# Known vulnerabilities in this project's lockfiles (scripts/check.sh vuln),
+# once a week and on demand. Weekly, not on every push: a new advisory arrives
+# without any commit, and the database download would slow every push. It runs
+# on this project's own CI runner; trivy's database comes from its public
+# mirror, and the scan itself has no network, so nothing about the code
+# leaves the house.
+#
+# Pins: see ci.yml.
+on:
+  schedule:
+    - cron: "17 6 * * 1"   # Mondays 06:17 UTC, off the hour when everyone's cron fires
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: weekly
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  vuln:
+    runs-on: ["{{PROJECT}}-ci"]
+    timeout-minutes: 30
+    permissions:
+      contents: read    # check out this private repo
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # To scan the image this project ships as well, build it in a step
+      # before this one and name it in CHECK_IMAGES (space-separated).
+      - name: known vulnerabilities
+        run: scripts/check.sh vuln
+
+  # TODO({{PROJECT}}): the owner's choice: a restore drill, if this project
+  # keeps backups. A backup nobody has restored is a hope, not a backup. A
+  # monthly job (its own schedule) that restores the newest backup set from
+  # the share into a scratch database and checks row counts and integrity
+  # against the set's own manifest, then throws the scratch copy away. The
+  # owner wires the share's path into the runner's environment on the box;
+  # it never appears in a tracked file. Delete this comment if there are no
+  # backups.

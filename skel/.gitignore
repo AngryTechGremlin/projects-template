@@ -3,6 +3,8 @@
 .env.local
 *.env
 !.env.example
+# The checks' tool pins (digests, no secrets): CI needs them committed.
+!scripts/check-tools.env
 pi.md
 *.key
 *.pem
