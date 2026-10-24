@@ -1,0 +1,13 @@
+# What goes public (docs/publishing.md). scripts/mirror.sh reads this file
+# from the commit being published, never from the working tree.
+#
+# One literal file path per `path =` line: no folders, no globs. A file goes
+# public only when someone adds its line here, so every newly public file is
+# a one-line change a person reviewed. Once published it is public for good.
+#
+# TODO({{PROJECT}}): add a LICENSE, list the files to publish, then follow the
+# first-publish checklist in docs/publishing.md.
+[publish]
+	repo = {{PUBLIC_OWNER}}/{{PROJECT}}
+	path = README.md
+	path = LICENSE

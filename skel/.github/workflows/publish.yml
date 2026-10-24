@@ -1,0 +1,98 @@
+name: publish
+
+# The public copy of this private repo (docs/publishing.md). PUBLISH names the
+# files; scripts/mirror.sh checks them and builds one fresh snapshot commit
+# for {{PUBLIC_OWNER}}/{{PROJECT}}. Private history never leaves.
+#
+# - Every push runs `check`: every gate, and the exact list of files that
+#   would go public (new ones marked) in the job summary, for the owner to
+#   read before a release.
+# - Only the owner's click publishes: Actions, publish, Run workflow, on main.
+#   A publish cannot be taken back, and on a free private repo nothing stops a
+#   push to main, so a push never publishes. Sessions cannot click: their
+#   tokens have no Actions write (and no Workflows permission, so none can
+#   rewrite this file to reach the key).
+# - The publisher itself is pinned here, by hash: scripts/mirror.sh and the
+#   scripts/pii-scan.sh it runs. A session can push a change to those (it
+#   cannot to this file), and the job refuses to run it, so changing what
+#   publishes takes the owner's edit here. To bump after a refresh from the
+#   template: read the diff, then paste `sha256sum scripts/mirror.sh
+#   scripts/pii-scan.sh` below.
+# - Each job starts from an empty workspace: on a house runner it outlives
+#   the job, and code run by an earlier job could have left a hook, an
+#   fsmonitor or a gpg.program in .git for this job's git calls to run, with
+#   the deploy key in reach.
+# - Both jobs run on this project's CI runner, never on the prod box's, and
+#   the public repo has no workflows at all: nothing public reaches a house
+#   runner.
+#
+# Every `uses:` is pinned to a full commit SHA, with its tag in a comment, the
+# same pin as ci.yml: checkout runs before the step that holds the key.
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read    # check out this private repo; the push uses the deploy key
+
+# One at a time per branch, and never cancelled: a publish cut off halfway
+# should not race the next one.
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  check:
+    if: github.event_name == 'push'
+    runs-on: ["{{PROJECT}}-ci"]
+    timeout-minutes: 10
+    steps:
+      - name: an empty workspace
+        run: find "${GITHUB_WORKSPACE:?}" -mindepth 1 -delete
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0              # the Source ancestry and credit range read history
+          persist-credentials: false  # nothing here pushes to this repo
+
+      - name: the publisher is the reviewed one
+        run: |
+          sha256sum --check --strict <<'EOF'
+          08a8f283cc291bc65d58c508402eb41c75b6dc93a44a0f4c0e6d08418b6f6b62  scripts/mirror.sh
+          4d57c2480099f6b488c1dd30be7e7dbb57c3e814e26091bae6ea8f624808bac5  scripts/pii-scan.sh
+          EOF
+
+      - name: what would go public
+        run: scripts/mirror.sh check
+
+  publish:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ["{{PROJECT}}-ci"]
+    timeout-minutes: 10
+    steps:
+      - name: an empty workspace
+        run: find "${GITHUB_WORKSPACE:?}" -mindepth 1 -delete
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: the publisher is the reviewed one
+        run: |
+          sha256sum --check --strict <<'EOF'
+          08a8f283cc291bc65d58c508402eb41c75b6dc93a44a0f4c0e6d08418b6f6b62  scripts/mirror.sh
+          4d57c2480099f6b488c1dd30be7e7dbb57c3e814e26091bae6ea8f624808bac5  scripts/pii-scan.sh
+          EOF
+
+      - name: publish the snapshot
+        env:
+          # A deploy key with write access to the public repo alone; its
+          # ruleset lets nothing else write there (docs/publishing.md).
+          PUBLIC_DEPLOY_KEY: ${{ secrets.PUBLIC_DEPLOY_KEY }}
+        run: scripts/mirror.sh publish
