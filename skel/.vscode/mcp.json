@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "github": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${workspaceFolder}/mcp/build/index.js"]
+    }
+  }
+}

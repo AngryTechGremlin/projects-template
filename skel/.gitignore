@@ -1,0 +1,40 @@
+# --- personal data: these must never be committed (agent.md §3) --------------
+.env
+.env.local
+*.env
+!.env.example
+pi.md
+*.key
+*.pem
+data/
+
+# --- MCP dev tooling ---------------------------------------------------------
+mcp/.env
+mcp/node_modules/
+mcp/build/
+
+# --- agent/editor local state ------------------------------------------------
+# .claude/settings.json IS committed (it pre-enables this repo's own MCP server).
+# settings.local.json is per-machine approval state and is not.
+.claude/settings.local.json
+
+# --- build & language junk ---------------------------------------------------
+node_modules/
+dist/
+build/
+out/
+__pycache__/
+*.pyc
+.ruff_cache/
+*.log
+
+# --- Paranoid mode (repos that describe homelab topology) --------------------
+# Swap the allow-list above for a deny-all whitelist, so a new file is ignored
+# until someone deliberately un-ignores it — the only .gitignore shape that
+# fails safe. See ~/Projects/homecast/.gitignore for a worked example.
+#
+#   /*
+#   !/.gitignore
+#   !/agent.md
+#   !/README.md
+#   ... one !/ line per tracked path ...

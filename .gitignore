@@ -1,0 +1,8 @@
+# The template's own secrets and context, never tracked (same rules as every project).
+.env
+pi.md
+mcp/.env
+.claude/settings.local.json
+# Build output if someone builds the skel MCP server in place.
+skel/mcp/node_modules/
+skel/mcp/build/
