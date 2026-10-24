@@ -37,14 +37,29 @@ and adds only what is personal to this machine.
 - **`pi.md` — narrative context only.** A gitignored file for context no machine
   consumes (which device belongs to whom, pending decisions, household notes).
   It points at `.env` for real values and never duplicates them.
-- **Before every push:** `scripts/pii-scan.sh`. It is also the `pre-push` hook
-  (`git config core.hooksPath .githooks`) and a required CI job, so the scan is
-  three deep on purpose. Never weaken a pattern to make a push go through — fix
-  the file, or add a narrow pathspec to `scripts/pii-scan.exclude` with a
-  comment saying why.
+- **Before every push:** `scripts/check.sh fast`, which runs
+  `scripts/pii-scan.sh` with the other checks (§6). It is also the `pre-push`
+  hook (`git config core.hooksPath .githooks`), and CI runs it as `full`, so
+  the scan is three deep on purpose. Never weaken a pattern to make a push go
+  through — fix the file, or add a narrow pathspec to
+  `scripts/pii-scan.exclude` with a comment saying why.
+- **Commit as `AngryTechGremlin <AngryTechGremlin@users.noreply.github.com>`.**
+  A commit's name and email are published with it and kept forever;
+  `check.sh` refuses any other address, and a name that is not the address's
+  GitHub handle. Commit messages and `Co-authored-by` lines are held to the
+  same rules as files.
 - Files unrelated to this project never ride along in a commit.
 - Keep the repo **private** by default; anything describing homelab topology
   stays private permanently.
+- **The one exception: a public copy**, and only where a `PUBLISH` file exists
+  (`docs/publishing.md`). Only the files `PUBLISH` lists go out, only through
+  `scripts/mirror.sh`, and only on the owner's click (§5). A session never
+  pushes anywhere but origin (the hook refuses any other URL) and never adds a
+  public remote. **Never read the publish blocklist**
+  (`~/.config/publish/blocklist`): a hit prints as `file:line` only, so open
+  that line, and if the problem is not plain, ask the owner. Never paste house
+  logs, hostnames, addresses or command output into a public issue or PR
+  reply: nothing checks what is typed there.
 
 ## 4. New endpoint bootstrap (agent-runnable)
 A working checkout is the clone **plus** the gitignored files git never carries.
@@ -52,18 +67,20 @@ A working checkout is the clone **plus** the gitignored files git never carries.
 1. `git clone https://github.com/{{OWNER}}/{{PROJECT}} ~/Projects/{{PROJECT}}`
 2. `cd mcp && npm install && npm run build`, then `cp .env.example .env` and put
    a fine-grained GitHub token in it, scoped to `{{OWNER}}/{{PROJECT}}` alone,
-   with the permissions `mcp/README.md` lists (Workflows stays off). Create the
-   repo on GitHub first: a fine-grained token can only name a repo that exists.
+   with the permissions `mcp/README.md` lists, plus Actions: Read-only so a
+   session can see CI results (never Actions write; Workflows stays off).
+   Create the repo on GitHub first: a fine-grained token can only name a repo
+   that exists.
    Restart the agent session so `.mcp.json` is picked up.
-3. `git config core.hooksPath .githooks` (enables the pre-push PII scan), and
+3. `git config core.hooksPath .githooks` (enables the pre-push checks), and
    `git config credential.helper '!"$(git rev-parse --show-toplevel)"/scripts/git-credential-github.sh'`
    so pushes read the same token from `mcp/.env`. `new-project.sh` sets both;
    a fresh **clone** needs them again, because git config is not cloned.
 4. `cp .env.example .env` at the root and fill in the real values.
 5. Recreate `pi.md` — copy it from the old machine or ask the owner.
    **Do not guess values.**
-6. Verify: `scripts/pii-scan.sh` is clean, the test suite passes, and one MCP
-   tool call answers (e.g. `list_repositories`).
+6. Verify: `scripts/check.sh fast` passes (it needs docker), the test suite
+   passes, and one MCP tool call answers (e.g. `list_repositories`).
 
 Until `.env` and `pi.md` exist, an agent has no real endpoint and must ask
 rather than assume.
@@ -75,12 +92,32 @@ rather than assume.
   only with explicit per-release approval from the owner ("ready to release?" →
   wait). Approval for one release never carries over to the next.
 
+**Publishing a public copy is not part of a release** (only where `PUBLISH`
+exists). A push to `main` publishes nothing: the owner reads the publish check
+job's list and clicks publish (Actions → publish → Run workflow, on `main`). A
+session never starts it — its token has no Actions write — and never reads a
+release approval as approval to publish.
+
 ## 6. Testing
 > TODO({{PROJECT}}): the one command that runs the suite, and what each tier
 > covers. Tests must not need a secret, a real device, or the LAN.
+- **Before every push: `scripts/check.sh fast`** (the pre-push hook runs it
+  too). Treat its output like a failing test: fix the cause, never skip the
+  hook (`--no-verify`) or loosen a check to get a push through. A reviewed
+  exception is written where the finding is, with the reason (the fix line
+  under each failure says how).
+- CI runs `scripts/check.sh full` (secrets across all of history,
+  Dockerfiles) and `weekly.yml` runs `scripts/check.sh vuln` (known
+  vulnerabilities in lockfiles): fix a weekly failure by upgrading.
 - CI runs on the house's own CI runner, never GitHub's cloud runners
   (`docs/ci-runner.md`): "does it build, parse and pass unit tests", plus the
-  PII scan. No secrets, no real devices, nothing that reaches the house.
+  house checks. No secrets, no real devices, nothing that reaches the house.
+- A public copy has no CI of its own: the public repo has no workflows and
+  never reaches a house runner. Outside PRs are tested here, privately.
+- **Code from outside the house** (a PR taken in with `scripts/mirror.sh pr
+  <N>`) runs only inside `scripts/sandbox.sh` — no network, no home folder, no
+  docker socket — in CI and in a session alike, and only after the owner has
+  read the diff.
 - Anything that touches real hardware is on-demand only, gated on an identifier
   in a gitignored file, and never runs in CI.
 

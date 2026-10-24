@@ -1,0 +1,83 @@
+name: ci
+
+# The template's own CI, on its own runner on the house's CI box, labelled
+# only `projects-template-ci` (skel/docs/ci-runner.md; the owner registers it
+# with runners/add-runner.sh ci projects-template). Never GitHub's cloud
+# runners (the owner's rule, 2026-10-24). Nothing here needs a secret.
+#
+# - hygiene: the house checks every project runs, on the template itself:
+#   scripts/check.sh full (a link to the skeleton's) scans for personal data,
+#   commit identity and secrets in all of history, lints every shell script
+#   (new-project.sh, runners/, skel/scripts/, the hook, tests/) and this
+#   workflow.
+# - tests: tests/run.sh. The deploy guard, the mirror's gates, and a scaffold
+#   made with new-project.sh, whose own check.sh lints the skeleton's
+#   workflows as a project gets them, placeholders filled in.
+#
+# Every `uses:` is pinned to a full commit SHA, the same pin as the skeleton's
+# ci.yml; that file says how to bump one.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+# Nothing by default; each job asks for what it needs.
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  hygiene:
+    runs-on: ["projects-template-ci"]
+    timeout-minutes: 15
+    permissions:
+      contents: read    # check out this private repo
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0              # gitleaks reads all of history
+          persist-credentials: false  # no later step pushes; leave no token on disk
+
+      - name: house checks
+        env:
+          BEFORE: ${{ github.event.before }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          # The commits this run brings, for the identity check, worked out as
+          # the skeleton's ci.yml does: in a fresh checkout "not on any
+          # remote", check.sh's default, is nothing.
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            range="$BASE..$HEAD_SHA"
+          elif [ -n "$BEFORE" ] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            range="$BEFORE..$HEAD_SHA"
+          elif [ "$GITHUB_REF" = "refs/heads/$DEFAULT_BRANCH" ]; then
+            # The default branch's first push, or a force-push past what this
+            # checkout knows: nothing to subtract, so every commit counts.
+            range="$HEAD_SHA"
+          else
+            range="$HEAD_SHA ^origin/$DEFAULT_BRANCH"
+          fi
+          CHECK_RANGE=$range scripts/check.sh full
+
+  tests:
+    runs-on: ["projects-template-ci"]
+    timeout-minutes: 20
+    permissions:
+      contents: read    # check out this private repo
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Needs docker and bwrap on the runner's PATH (skel/docs/ci-runner.md).
+      - name: guard, mirror gates, scaffold smoke
+        run: tests/run.sh

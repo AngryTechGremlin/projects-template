@@ -1,0 +1,11 @@
+# Pathspecs the template's own PII scan skips, one per line, each with the
+# reason. scripts/pii-scan.sh here is a link to the skeleton's, whose built-in
+# self-excludes name scripts/pii-scan.sh and .githooks/pre-push at the root,
+# so under skel/ they need saying again.
+#
+# Every project made from skel/ skips these two by construction (each has
+# quoted the scan's patterns), and the template should give the same answer
+# about the same file. If pii-scan.sh drops one of its self-excludes, drop
+# the line here too.
+skel/scripts/pii-scan.sh
+skel/.githooks/pre-push

@@ -15,8 +15,9 @@ snapshot of someone else's half-finished conventions.
 
 `{{PROJECT}}` was scaffolded from `~/Projects/_template`, which holds the
 canonical copy of all of it. Improvements to the shared parts (the MCP server,
-`scripts/pii-scan.sh`, the CI hygiene job, the `agent.md` skeleton) are made in
-the template and flow to the next project.
+`scripts/check.sh` and `scripts/pii-scan.sh`, the CI hygiene job, the
+`agent.md` skeleton) are made in the template and flow to the next project,
+and to this one through `new-project.sh --adopt --refresh`.
 
 ## Consequences
 

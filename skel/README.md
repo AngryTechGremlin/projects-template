@@ -20,8 +20,15 @@ exists. Real values never appear in a tracked file.
 
 ```bash
 # TODO({{PROJECT}}): the one command that runs the tests
-scripts/pii-scan.sh          # run before every push (also a pre-push hook)
+scripts/check.sh fast        # the house checks: run before every push (the pre-push hook runs it too)
 ```
+
+`scripts/check.sh` is the one entry point for the house's checks: the PII scan,
+commit identity, secrets, workflows and shell scripts, each tool a Docker image
+pinned in `scripts/check-tools.env`, so it needs docker. CI runs it as `full`
+(secrets across all of history, plus Dockerfiles), and `weekly.yml` runs
+`vuln` (known vulnerabilities in the lockfiles). The same script everywhere
+means a red CI run is never a surprise.
 
 The agent contract for this repo is [`agent.md`](agent.md); architecture
 decisions are in [`docs/adr/`](docs/adr/).
