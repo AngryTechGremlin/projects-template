@@ -122,10 +122,11 @@ above the trigger; `scripts/check.sh` fails on it until then:
 on:
   # zizmor: ignore[dangerous-triggers] private repo; runs only after ci on main, on the sha ci passed, on prod's runner (the guard)
   workflow_run:
-``` The labels already
-keep a deploy off the CI box; the guard is the second lock, because a deploy
-that syncs with `rsync --delete` into `~/Projects/{{PROJECT}}` would wipe the
-working checkout there.
+```
+
+The labels already keep a deploy off the CI box; the guard is the second
+lock, because a deploy that syncs with `rsync --delete` into
+`~/Projects/{{PROJECT}}` would wipe the working checkout there.
 
 ## Outside code, and the runner's user
 
