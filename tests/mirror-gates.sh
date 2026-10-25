@@ -253,6 +253,16 @@ check "  ...each one named" bash -c 'grep -q "email address" "$1" && grep -q "in
 check "  ...which the private scan lets through" bash -c 'cd "$1" && scripts/pii-scan.sh >/dev/null' _ "$priv"
 
 on_case
+printf 'GATEWAY_URL = "http://host.docker.internal:4000/v1"\n' >>"$priv/README.md"
+commit -m 'docs: x'
+expect 0 '.' "Docker's host.docker.internal names no one's house" check
+
+on_case
+printf 'Try host.docker.internal, else example-box.lan.\n' >>"$priv/README.md"
+commit -m 'docs: x'
+expect 1 'internal host name' '  ...but another internal name on the same line still fails' check
+
+on_case
 printf 'README.md working-tree-encoding=UTF-16LE\n' >"$priv/.gitattributes"
 blob=$(printf '# demo\n\nAsk the %s admin.\n' "$word" | g hash-object -w --no-filters --stdin)
 g update-index --cacheinfo "100644,$blob,README.md"

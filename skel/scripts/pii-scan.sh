@@ -206,13 +206,25 @@ not_allowed_emails() {
     if grep -oE -- "$email_re" <<<"$body" | grep -qvE -- "$email_ok"; then printf '%s\n' "$line"; fi
   done
 }
+# Docker's own names for the host and its gateway are the same on every
+# machine, so they name no one's house. Like the emails: a hit stays when any
+# other internal name is on the line.
+internal_re='[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.(lan|local|internal|home\.arpa)\.?([^A-Za-z0-9.-]|$)'
+internal_ok='^(host|gateway)\.docker\.internal'
+not_docker_names() {
+  local line body
+  while IFS= read -r line; do
+    body=${line#*:}; body=${body#*:}
+    if grep -oE -- "$internal_re" <<<"$body" | grep -qvE -- "$internal_ok"; then printf '%s\n' "$line"; fi
+  done
+}
 if (( public )); then
   scan hard 'CGNAT (Tailscale) host address' \
     "\\b100\\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\\.$o\\.$h\\b"
   scan hard 'private IPv6 address (unique-local fd.., link-local fe80)' \
     '\b([fF][dD][0-9a-fA-F]{2}|[fF][eE]80):[0-9a-fA-F:]*:[0-9a-fA-F]+'
-  scan hard 'internal host name (.lan, .local, .internal, .home.arpa)' \
-    '[A-Za-z0-9-]\.(lan|local|internal|home\.arpa)\.?([^A-Za-z0-9.-]|$)'
+  scan hard 'internal host name (.lan, .local, .internal, .home.arpa; not Docker'"'"'s host.docker.internal)' \
+    '[A-Za-z0-9-]\.(lan|local|internal|home\.arpa)\.?([^A-Za-z0-9.-]|$)' '' not_docker_names
   scan hard 'email address (only @users.noreply.github.com and example domains go public)' \
     "$email_re" '' not_allowed_emails
   # Config-file shape: the whole value one unquoted run with a digit in it, so
