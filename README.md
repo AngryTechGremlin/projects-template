@@ -269,6 +269,13 @@ prints the one `sudo mkdir … && sudo chown …` line and stops, and once
 registered it prints the `sudo ./svc.sh install` line that installs the
 system service. Both stay the owner's steps.
 
+`publish/add-public-key.sh <repo>` is the public mirror's one-time link
+between a private repo and its public copy, run once per repo by the owner:
+it makes a deploy key for that repo alone and prints the two pastes (public
+half on the public repo, private half as the `PUBLIC_DEPLOY_KEY` secret), and
+`--done` proves GitHub took it before shredding the private half
+(`skel/docs/publishing.md`, "The deploy key").
+
 A deploy job runs on prod's runner, and its first step is the same line in
 every repo:
 

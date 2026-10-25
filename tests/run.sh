@@ -7,6 +7,7 @@
 #   1. tests/guard.sh         the deploy guard, against fake workspaces
 #   2. tests/mirror-gates.sh  the public mirror's gates, on a throwaway fixture
 #   3. tests/runner-kit.sh    runners/add-runner.sh refuses what it must, offline
+#      tests/publish-key.sh   publish/add-public-key.sh makes one private key, offline
 #   4. the scaffold smoke     new-project.sh as a person runs it (new with
 #      test, below            --publish, --adopt, --adopt --publish, --adopt
 #                             --refresh) into a scratch folder, then the
@@ -298,6 +299,7 @@ suite() { # <name> <command...>
 suite "deploy guard" bash "$tpl/tests/guard.sh"
 suite "mirror gates" bash "$tpl/tests/mirror-gates.sh"
 suite "runner kit" bash "$tpl/tests/runner-kit.sh"
+suite "publish key" bash "$tpl/tests/publish-key.sh"
 suite "scaffold smoke" smoke
 
 printf '\n=== summary\n'

@@ -187,13 +187,16 @@ A deploy key reaches one repo, git only, never expires, and is the one
 identity a ruleset can tell apart from the owner (who is an admin, so a token
 of theirs would be let through everywhere).
 
-1. In your own terminal, not a session:
-   `ssh-keygen -t ed25519 -N '' -C publish-{{PROJECT}} -f k`
-2. Public repo, Settings, Deploy keys: add `k.pub`, with **Allow write
-   access**.
-3. Private repo, Settings, Secrets and variables, Actions: a secret named
-   `PUBLIC_DEPLOY_KEY` holding all of `k`.
-4. `shred -u k k.pub`.
+1. `~/Projects/_template/publish/add-public-key.sh {{PROJECT}}` makes a key
+   for this repo alone (mode 600, in `~/.config/publish/keys/`) and prints
+   the two pastes with their links:
+2. the public half on the public repo, Settings, Deploy keys, with **Allow
+   write access**;
+3. the private half in this repo's Settings, Secrets and variables, Actions,
+   as `PUBLIC_DEPLOY_KEY`.
+4. `add-public-key.sh --done {{PROJECT}}` asks GitHub which repo the key
+   opens (a deploy key answers with the repo's name), then shreds the private
+   half on disk once you confirm the secret is saved.
 
 To rotate: the same steps with a new key, then delete the old deploy key.
 
