@@ -122,7 +122,8 @@ for name in "${only[@]}"; do
   fi
   git -C "$c" fetch -q origin dev || { attention "$name" "cannot fetch dev (token expired?)"; continue; }
   git -C "$c" switch -q -c refresh-from-template origin/dev
-  if [[ $(head -c 40 "$c/.template-version" 2>/dev/null) == "$ver" ]]; then
+  was=$(head -c 40 "$c/.template-version" 2>/dev/null || true)
+  if [[ $was == "$ver" ]]; then
     row "$name" "up to date (${ver:0:12})"
     continue
   fi
@@ -150,8 +151,19 @@ Template ${ver}. Refreshed: ${changed}."
     continue
   fi
   notes=()
-  drift=$(grep -oE 'port by hand: .*' "$c.refresh" | sed 's/port by hand: //' | paste -sd ' ' -)
-  [[ -z $drift ]] || notes+=("port by hand: $drift")
+  # A customized file always differs from the template (that is what makes it
+  # customized), so only one whose template copy changed since the version this
+  # repo was on needs a person; with no version recorded yet, all of them do.
+  drift=()
+  while IFS= read -r f; do
+    [[ -n $f ]] || continue
+    if [[ $was =~ ^[0-9a-f]{40}$ ]] && git -C "$TEMPLATE_DIR" cat-file -e "$was^{commit}" 2>/dev/null \
+       && git -C "$TEMPLATE_DIR" diff --quiet "$was" "$ver" -- "skel/$f"; then
+      continue
+    fi
+    drift+=("$f")
+  done < <(grep -oE 'port by hand: .*' "$c.refresh" | sed 's/port by hand: //')
+  (( ${#drift[@]} == 0 )) || notes+=("port by hand: ${drift[*]}")
   grep -q 'publish.yml pins the publisher' "$c.refresh" && notes+=("publish.yml pins need the new hashes (log)")
   grep -q 'the MCP server changed' "$c.refresh" && notes+=("MCP server changed: rebuild it in the working checkout")
   if (( dry )); then
