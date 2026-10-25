@@ -1,6 +1,7 @@
 # The template's own secrets and context, never tracked (same rules as every project).
 .env
 pi.md
+scripts/pii-scan.local
 mcp/.env
 .claude/settings.local.json
 # Build output if someone builds the skel MCP server in place.

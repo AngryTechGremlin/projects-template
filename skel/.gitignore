@@ -6,6 +6,8 @@
 # The checks' tool pins (digests, no secrets): CI needs them committed.
 !scripts/check-tools.env
 pi.md
+# The PII scan's local list of the house's own words (scripts/pii-scan.sh).
+scripts/pii-scan.local
 *.key
 *.pem
 data/

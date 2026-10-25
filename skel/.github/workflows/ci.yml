@@ -23,6 +23,8 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# bash runs each step with -eo pipefail: a pipe whose left side may fail on
+# purpose needs its own `|| true` (port a repo's steps with that in mind).
 defaults:
   run:
     shell: bash
@@ -127,11 +129,19 @@ jobs:
       # - name: compile and test
       #   run: |
       #     set -euo pipefail
+      #     # A fresh venv per run, in the checkout (checkout's clean removes it,
+      #     # and sandbox.sh sees it): the house runner keeps setup-python's
+      #     # interpreter between runs, and a leftover package must never be
+      #     # what makes a test pass.
+      #     python -m venv .venv && . .venv/bin/activate
+      #     pip install -q -r requirements.txt
       #     python -m compileall -q .     # parses every file, runs none
       #     {{SANDBOX}}python -m unittest discover -s tests -v
       #
       # - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-      #   with: { node-version: "22" }
+      #   # No GitHub cache: v7 turns one on by itself once package.json names
+      #   # a packageManager, and it would upload the dependencies.
+      #   with: { node-version: "22", package-manager-cache: false }
       # - name: build and test
       #   run: |
       #     set -euo pipefail

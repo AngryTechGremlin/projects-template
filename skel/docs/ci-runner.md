@@ -128,6 +128,24 @@ The labels already keep a deploy off the CI box; the guard is the second
 lock, because a deploy that syncs with `rsync --delete` into
 `~/Projects/{{PROJECT}}` would wipe the working checkout there.
 
+## Leaving the box as you found it
+
+A house runner keeps its workspace and tool cache between runs, unlike a cloud
+one, so a step has to clean up after itself:
+
+- **Containers run as you.** `docker run -v "$PWD:/io" <image>` with no
+  `--user` writes root-owned files (a `.ruff_cache`, build output) that the next
+  checkout cannot delete: pass `--user "$(id -u):$(id -g)"` (recess, 2026-10).
+- **A fresh venv per run** (`python -m venv .venv` in the checkout), never
+  `pip install` into setup-python's interpreter, which outlives the run.
+- **Service containers take a free port** (`ports: ["5432"]` plus
+  `job.services.<name>.ports`), since the box runs the house's own databases;
+  it is reachable from the LAN for the length of the job, so it holds
+  throwaway test data and a CI-only password, nothing else.
+- **A test stack takes a project name and ports of its own**, set by CI, so a
+  run never shares a stack with someone running the same tier by hand, nor
+  `docker compose down -v` theirs (hallpass e9c9f80).
+
 ## Outside code, and the runner's user
 
 The runner runs as the CI box's login user, which is in the `docker`, `lxd`

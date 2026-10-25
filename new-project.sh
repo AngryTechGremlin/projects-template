@@ -345,7 +345,7 @@ if (( adopt )); then
 
   # Make sure the ignore rules the tooling depends on are present.
   missing=()
-  for pat in '.env' 'pi.md' 'mcp/.env' 'mcp/node_modules/' 'mcp/build/' '.claude/settings.local.json'; do
+  for pat in '.env' 'pi.md' 'scripts/pii-scan.local' 'mcp/.env' 'mcp/node_modules/' 'mcp/build/' '.claude/settings.local.json'; do
     grep -qxF -- "$pat" "$target/.gitignore" 2>/dev/null || missing+=("$pat")
   done
   # A `*.env` rule also ignores the tool pins, and CI then has none and stops.

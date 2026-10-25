@@ -107,7 +107,9 @@ soft=("${base[@]}"
 
 # A line that says "this is an example" is taken at its word -- except in a
 # public tree, where nobody is around to check that it is one.
-placeholder='your_|<[A-Za-z0-9_-]+>|changeme|CHANGEME|placeholder|PLACEHOLDER|REPLACE_?ME|example|EXAMPLE|sample|dummy|fixture|xxxx|XXXX|\.\.\.'
+# Not the bare word "example": a line such as "for the example cluster the
+# token is ghp_..." would excuse itself (starboard found that, 11b7d66).
+placeholder='your_|<[A-Za-z0-9_-]+>|changeme|CHANGEME|placeholder|PLACEHOLDER|REPLACE_?ME|example\.(com|org|net)|example-only|example-parent|EXAMPLE|[Ff]or example|sample|dummy|fixture|xxxx|XXXX|\.\.\.'
 (( public )) && placeholder=''
 mac_sentinel='00:00:00:00:00:00|[fF]{2}(:[fF]{2}){5}|[aA][aA]:[bB][bB]:[cC][cC]:[dD][dD]:[eE][eE]:[fF][fF]'
 
@@ -162,17 +164,20 @@ hard_specs=("${self[@]}")
 soft_specs=("${soft[@]}")
 
 # --- hard --------------------------------------------------------------------
+# No line excuses itself here: a real key next to the word "sample" is still a
+# real key. A fake one in a test is built at run time, or is too short or too
+# regular to match.
 scan hard 'GitHub token' \
-  '\b(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}|\bgithub_pat_[A-Za-z0-9_]{20,}' "$placeholder"
+  '\b(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}|\bgithub_pat_[A-Za-z0-9_]{20,}'
 scan hard 'API key (OpenAI/Anthropic/AWS/Google)' \
-  '\b(sk-[A-Za-z0-9_-]{20,}|sk-ant-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35})\b' "$placeholder"
+  '\b(sk-[A-Za-z0-9_-]{20,}|sk-ant-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35})\b'
 scan hard 'access token (JWT, e.g. a Home Assistant long-lived token)' \
-  '\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}' "$placeholder"
+  '\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}'
 scan hard 'Tailscale key' \
-  '\btskey-[a-z]+-[A-Za-z0-9]{6,}-[A-Za-z0-9]{10,}' "$placeholder"
+  '\btskey-[a-z]+-[A-Za-z0-9]{6,}-[A-Za-z0-9]{10,}'
 # An .npmrc that names ${NPM_TOKEN} is how it should be; a literal is a leak.
 scan hard 'npm or Slack token' \
-  '\bnpm_[A-Za-z0-9]{36}\b|_authToken[[:space:]]*=[[:space:]]*[A-Za-z0-9_-]{16,}|\bxox[abposr]-[A-Za-z0-9-]{10,}' "$placeholder"
+  '\bnpm_[A-Za-z0-9]{36}\b|_authToken[[:space:]]*=[[:space:]]*[A-Za-z0-9_-]{16,}|\bxox[abposr]-[A-Za-z0-9-]{10,}'
 scan hard 'private key material' \
   '-----BEGIN [A-Z ]*PRIVATE KEY-----'
 
@@ -203,9 +208,15 @@ email_ok='^([A-Za-z0-9._%+-]+@users\.noreply\.github\.com|no-?reply@[A-Za-z0-9.-
 # Keep a hit only when one address on the line is not an allowed one: a
 # line-wide skip would let a noreply address excuse a real one beside it.
 not_allowed_emails() {
-  local line body
+  local line path body
   while IFS= read -r line; do
-    body=${line#*:}; body=${body#*:}
+    path=${line%%:*}; body=${line#*:}; body=${body#*:}
+    # npm copies a package's own deprecation notice into the lockfile, and some
+    # carry its maintainer's public address: not this house's, and rewritten on
+    # every install, so no hand edit could keep it out (blockyard).
+    [[ $path == *package-lock.json && $body == *'"deprecated":'* ]] && continue
+    # A URL's user:password@host is a login, not an address (homecast).
+    body=$(sed -E 's#[A-Za-z][A-Za-z0-9+.-]*://[^/@[:space:]]*@#//#g' <<<"$body")
     if grep -oE -- "$email_re" <<<"$body" | grep -qvE -- "$email_ok"; then printf '%s\n' "$line"; fi
   done
 }
@@ -272,6 +283,35 @@ if [[ -n $blocklist ]]; then
   fi
 fi
 
+# --- local -------------------------------------------------------------------
+# What only this house knows to look for, and no pattern can: the family's
+# names, the home's own words. One extended regex per line in the gitignored
+# scripts/pii-scan.local, matched as a whole word in any case, in every file
+# (homecast's tier, now every repo's). The list is personal data itself, so it
+# must be gitignored and a hit prints where only, never the word. It runs
+# where the list is (the owner's box, by the pre-push hook), not in CI.
+local_list=scripts/pii-scan.local
+local_n=0
+if [[ -e $local_list ]]; then
+  git check-ignore -q -- "$local_list" \
+    || { echo "pii-scan: $local_list holds the house's own words but is not gitignored; add it to .gitignore" >&2; exit 2; }
+  words=$(sed -e "1s/^$(printf '\357\273\277')//" -e 's/\r//g' -e '/^[[:space:]]*#/d' \
+    -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' "$local_list")
+  if [[ -n $words ]]; then
+    local_n=$(grep -c . <<<"$words")
+    rc=0
+    hits=$(git grep --untracked -n -z -I -i -w -E -f <(printf '%s\n' "$words") -- . "${base[@]}" \
+      | tr '\0' '\t' | cut -f1,2 | tr '\t' ':') || rc=$?
+    if ((rc == 0)); then
+      printf '\n!! %s\n%s\n' "a word from $local_list (where only; see the list)" "$hits"
+      fail=1
+    elif ((rc != 1)); then
+      echo "pii-scan: git grep failed (exit $rc) on $local_list" >&2
+      exit 2
+    fi
+  fi
+fi
+
 if (( fail )); then
   cat >&2 <<'MSG'
 
@@ -290,4 +330,5 @@ fi
 mode=""
 (( public )) && mode+="; public mode"
 [[ -z $blocklist ]] || mode+="; blocklist"
+(( local_n == 0 )) || mode+="; local list"
 echo "pii-scan: clean ($scanned files$mode)"

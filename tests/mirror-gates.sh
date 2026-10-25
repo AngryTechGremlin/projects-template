@@ -252,7 +252,40 @@ printf 'The box is %s, mail %s, the share example-box.lan.\n' "$(printf '100.%d.
 commit -m 'docs: x'
 expect 1 'CGNAT' 'public-only shapes: a CGNAT address, an email, a .lan name' check
 check "  ...each one named" bash -c 'grep -q "email address" "$1" && grep -q "internal host name" "$1"' _ "$t/out.$n"
-check "  ...which the private scan lets through (the line says it is an example)" bash -c 'cd "$1" && scripts/pii-scan.sh >/dev/null' _ "$priv"
+check "  ...and the private scan refuses the email too: a bare \"example\" no longer excuses a line" \
+  bash -c 'cd "$1" && ! scripts/pii-scan.sh >/dev/null 2>&1' _ "$priv"
+
+on_case
+printf 'For example, write to %s.\n' "$(printf 'pat@%s.%s' mailbox net)" >>"$priv/README.md"
+check "a line that says \"For example\" is still taken at its word in a private repo" \
+  bash -c 'cd "$1" && scripts/pii-scan.sh >/dev/null 2>&1' _ "$priv"
+
+on_case
+# Built here, so this file holds no token of its own.
+printf 'sample config: token = %s\n' "$(printf 'ghp_%s' "$(printf 'A1b2C3d4%.0s' 1 2 3 4)")" >>"$priv/README.md"
+check "a real-looking token is refused even on a line that says \"sample\"" \
+  bash -c 'cd "$1" && ! scripts/pii-scan.sh >/dev/null 2>&1' _ "$priv"
+
+on_case
+printf '  "deprecated": "no longer maintained, write to %s",\n' "$(printf 'dev@%s.%s' upstream org)" >"$priv/package-lock.json"
+printf 'clone https://%s@%s/x.git\n' "$(printf 'user:%s' s3cret)" "$(printf 'git.%s.%s' upstream org)" >>"$priv/README.md"
+check "npm's deprecation notice and a URL's user:password@ are not emails" \
+  bash -c 'cd "$1" && scripts/pii-scan.sh >/dev/null 2>&1' _ "$priv"
+
+on_case
+printf 'scripts/pii-scan.local\n' >>"$priv/.gitignore"
+printf '# the house'"'"'s own words\nzorblatt\n' >"$priv/scripts/pii-scan.local"
+printf 'Ask Zorblatt about it.\n' >>"$priv/README.md"
+check "a word from the local list is refused, matched as a whole word in any case" \
+  bash -c 'cd "$1" && ! scripts/pii-scan.sh >/dev/null 2>&1' _ "$priv"
+check "  ...and the output names where only, never the word" \
+  bash -c 'cd "$1" && out=$(scripts/pii-scan.sh 2>&1); ! grep -qi zorblatt <<<"$out" && grep -q "README.md:" <<<"$out"' _ "$priv"
+printf 'Ask Zorblatts about it.\n' >"$priv/README.md"
+check "  ...but only as a whole word" bash -c 'cd "$1" && scripts/pii-scan.sh >/dev/null 2>&1' _ "$priv"
+sed -i '/pii-scan.local/d' "$priv/.gitignore"
+check "a local list that is not gitignored stops the scan (exit 2)" \
+  bash -c 'cd "$1"; scripts/pii-scan.sh >/dev/null 2>&1; test $? = 2' _ "$priv"
+rm -f "$priv/scripts/pii-scan.local"
 
 on_case
 printf 'Questions go to %s.\n' "$(printf 'pat@%s.%s' mailbox net)" >>"$priv/README.md"

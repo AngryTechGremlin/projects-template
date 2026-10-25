@@ -116,13 +116,26 @@ disabled:
 
 - **Hard** — credential shapes that are never a coincidence (GitHub, OpenAI,
   Anthropic, AWS, Google, npm and Slack keys; JWTs, which is what a Home
-  Assistant token is; Tailscale keys; PEM private key blocks). Scanned
-  everywhere, including test paths and whatever `scripts/pii-scan.exclude`
-  lists. A hit is real: fix the file *and* rotate the key.
+  Assistant token is; Tailscale keys; PEM private key blocks), and email
+  addresses but the ones that belong to no one (GitHub noreply, `noreply@`,
+  the example and reserved domains). Scanned everywhere, including test paths
+  and whatever `scripts/pii-scan.exclude` lists, and no line excuses itself:
+  a real key beside the word "sample" is still a real key. A hit is real: fix
+  the file *and* rotate the key. (An email on a line that says it is an
+  example passes in a private repo; npm's deprecation notices in a lockfile
+  and a URL's `user:password@` are not addresses.)
 - **Soft** — RFC1918 host addresses, MACs, passwords assigned a literal, GPS
   coordinates (four or more decimals: a home's coordinates are its address).
   Real leaks look exactly like fixtures, so these skip test paths and lines
-  that say they are an example.
+  that say they are an example: `example.com`, `For example`, `sample`,
+  `<placeholder>` and the like, but not the bare word "example", which a real
+  line can carry by chance (starboard, 2026-10).
+- **Local** — what only this house knows: one regex per line in the
+  gitignored `scripts/pii-scan.local` (the family's names, the home's own
+  words), matched as a whole word in any case, in every file. It runs where
+  the list is (the dev box, from the pre-push hook), not in CI; a hit prints
+  `file:line` only, and a list that is not gitignored stops the scan
+  (homecast's tier, now every repo's).
 
 Exempt by construction, not by exception list: the documentation ranges
 (`192.0.2.x`, `198.51.100.x`, `203.0.113.x` — use these in tests), `.0`/`.255`
@@ -174,7 +187,12 @@ since plain `--adopt` never overwrites. It splits the files in two:
   printed: `scripts/pii-scan.sh`, `scripts/check.sh`,
   `scripts/check-tools.env`, `.githooks/pre-push`, `docs/ci-runner.md`, and
   for a repo with the mirror kit `scripts/mirror.sh`, `scripts/sandbox.sh`,
-  `docs/publishing.md`. No repo edits these; a fix to one goes in the template.
+  `docs/publishing.md`, and the MCP server's `mcp/package.json`, lockfile,
+  `tsconfig.json` and `src/` (so a dependency fix such as zod 3 to 4 reaches
+  every repo; the refresh says to rebuild it). No repo edits these; a fix to
+  one goes in the template. A repo-specific rule a managed file needs (a word
+  list, a runner note) belongs in the template or in a gitignored local file,
+  never in the managed copy, which the next refresh overwrites.
 - **Customized** — never written; refresh prints how each differs from the
   template, to port by hand: `ci.yml`, `weekly.yml`, `agent.md`, `CLAUDE.md`,
   `README.md`, `scripts/pii-scan.exclude`, and with the kit `PUBLISH` and
