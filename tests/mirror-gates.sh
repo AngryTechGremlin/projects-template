@@ -471,9 +471,13 @@ check "the public repo still holds only what main reaches" only_reachable
 sb() { (cd "$priv" && scripts/sandbox.sh "$@"); }
 check "sandbox.sh: runs a command" sb true
 check "sandbox.sh: no network but loopback" test "$(sb awk 'NR > 2 { print $1 }' /proc/net/dev 2>&1)" = "lo:"
-# Empty but for the way down to the checkout, when the checkout is under it.
+# Empty but for the way down to what sandbox.sh binds under it on purpose: the
+# checkout, and on a CI runner the read-only tool cache (RUNNER_TOOL_CACHE).
+home_want=$(for p in "$priv" "${RUNNER_TOOL_CACHE:-}"; do
+  [ -n "$p" ] && [ -d "$p" ] || continue; rel=${p#"$HOME"/}; [ "$rel" = "$p" ] || echo "${rel%%/*}"
+done | sort -u | tr '\n' ' ')
 check "sandbox.sh: the home folder is empty" \
-  sb bash -c 'rel=${PWD#"$HOME"/}; want=; [ "$rel" = "$PWD" ] || want=${rel%%/*}; [ "$(ls -A "$HOME")" = "$want" ]'
+  sb bash -c '[ "$(ls -A "$HOME" | sort -u | tr "\n" " ")" = "$1" ]' _ "$home_want"
 check "sandbox.sh: no docker or lxd socket" \
   sb bash -c '! [ -e /run/docker.sock ] && ! [ -e /var/run/docker.sock ] && ! [ -e /var/snap/lxd/common/lxd/unix.socket ]'
 check "sandbox.sh: other processes are out of sight" sb bash -c '[ "$(ls /proc | grep -c "^[0-9]")" -lt 10 ]'

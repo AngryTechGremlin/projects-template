@@ -94,8 +94,12 @@ jobs:
             # The default branch's first push, or a force-push past what this
             # checkout knows: nothing to subtract, so every commit counts.
             range="$HEAD_SHA"
-          else
+          elif git rev-parse -q --verify "origin/$DEFAULT_BRANCH^{commit}" >/dev/null; then
             range="$HEAD_SHA ^origin/$DEFAULT_BRANCH"
+          else
+            # The default branch is not on the remote yet (a new repo whose
+            # first push was another branch): nothing to subtract either.
+            range="$HEAD_SHA"
           fi
           CHECK_RANGE=$range scripts/check.sh full
 
