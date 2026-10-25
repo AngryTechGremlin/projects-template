@@ -64,7 +64,7 @@ jobs:
         run: |
           sha256sum --check --strict <<'EOF'
           08a8f283cc291bc65d58c508402eb41c75b6dc93a44a0f4c0e6d08418b6f6b62  scripts/mirror.sh
-          4d57c2480099f6b488c1dd30be7e7dbb57c3e814e26091bae6ea8f624808bac5  scripts/pii-scan.sh
+          9c49336728945719dc47d6fe8415d3d3b75af01874d2fd71f10a20103d0e51e1  scripts/pii-scan.sh
           EOF
 
       - name: what would go public
@@ -87,7 +87,7 @@ jobs:
         run: |
           sha256sum --check --strict <<'EOF'
           08a8f283cc291bc65d58c508402eb41c75b6dc93a44a0f4c0e6d08418b6f6b62  scripts/mirror.sh
-          4d57c2480099f6b488c1dd30be7e7dbb57c3e814e26091bae6ea8f624808bac5  scripts/pii-scan.sh
+          9c49336728945719dc47d6fe8415d3d3b75af01874d2fd71f10a20103d0e51e1  scripts/pii-scan.sh
           EOF
 
       - name: publish the snapshot
