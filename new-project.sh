@@ -202,6 +202,7 @@ if (( with_mcp )); then
   managed+=(mcp/package.json mcp/package-lock.json mcp/tsconfig.json mcp/src/index.ts mcp/src/github-service.ts)
 fi
 mcp_changed=0
+pins_changed=0
 
 # Check the template has every file this run copies before writing anything,
 # so a template mid-edit fails here rather than leaving half a project.
@@ -271,6 +272,7 @@ refresh_one() { # overwrite a managed file with the template's, showing the chan
     printf '  %s: %s\n%s\n' "$( ((dry)) && echo 'would refresh' || echo 'refreshed')" "$rel" "$diff_out"
     quiet cp -- "$rendered" "$dst"
     [[ $rel != mcp/* ]] || mcp_changed=1
+    [[ $rel != scripts/mirror.sh && $rel != scripts/pii-scan.sh ]] || pins_changed=1
   else
     printf '  unchanged: %s\n' "$rel"
   fi
@@ -451,6 +453,15 @@ if (( with_mcp )) && [[ -d $target/mcp ]]; then
   fi
 fi
 
+# Which template this repo's shared files came from, so the refresh job and
+# the pre-push hook can tell when it is behind. TEMPLATE_VERSION wins: the
+# refresh job builds from an export of the template's main, which has no .git.
+template_version=${TEMPLATE_VERSION:-$(git -C "$TEMPLATE_DIR" rev-parse HEAD 2>/dev/null || true)}
+if [[ $template_version =~ ^[0-9a-f]{40}$ ]] && (( ! dry )); then
+  printf '%s\n' "$template_version" >"$target/.template-version"
+  printf '  set:   .template-version = %s\n' "${template_version:0:12}"
+fi
+
 if (( adopt && refresh )); then
   cat <<NEXT
 
@@ -460,6 +471,13 @@ done. next:
   scripts/check.sh fast        # the checks pre-push and CI run; fix what it finds before pushing
   git status                   # then commit as: chore: refresh shared tooling from the template
 NEXT
+  if (( pins_changed && ! dry )) && [[ -f $target/.github/workflows/publish.yml ]]; then
+    # publish.yml pins the publisher by hash, so a changed one is refused until
+    # a person updates the pins there: the edit that says "publish with this".
+    printf '\n  !! publish.yml pins the publisher by hash, and a refresh changed it. Until these lines\n'
+    printf '     replace the old ones (both jobs), the publish check fails:\n'
+    ( cd "$target" && sha256sum scripts/mirror.sh scripts/pii-scan.sh | sed 's/^/          /' )
+  fi
   if (( mcp_changed )); then
     printf '  (cd mcp && npm ci --ignore-scripts && npm run build)   # the MCP server changed: rebuild it\n'
   fi

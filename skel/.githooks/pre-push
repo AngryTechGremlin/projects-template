@@ -72,6 +72,20 @@ while read -r _ lsha _ rsha; do
 done
 (( ${#revs[@]} )) || exit 0
 
-check=$(git rev-parse --show-toplevel)/scripts/check.sh
+top=$(git rev-parse --show-toplevel)
+check=$top/scripts/check.sh
 [[ -f $check ]] || { echo "pre-push: scripts/check.sh is missing; run new-project.sh --adopt --refresh" >&2; exit 1; }
+
+# A note, never a block: is this repo behind the template it came from? Only
+# on a box where the template sits beside it, and only once the repo says
+# which template commit it is on (.template-version, written by a refresh).
+tpl=$(dirname -- "$top")/_template
+if [[ -f $top/.template-version && -d $tpl/.git ]]; then
+  have=$(head -c 40 "$top/.template-version")
+  behind=$(git -C "$tpl" rev-list --count "$have..main" 2>/dev/null) || behind=
+  if [[ -n $behind && $behind != 0 ]]; then
+    echo "note  template: $behind template commit(s) behind; refresh with: $tpl/new-project.sh --adopt $top --refresh" >&2
+  fi
+fi
+
 CHECK_RANGE="${revs[*]} --not --remotes" exec bash "$check" fast

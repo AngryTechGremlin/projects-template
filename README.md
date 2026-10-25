@@ -330,6 +330,46 @@ It is opt-in because an unused publisher in every repo is attack surface.
 first-publish checklist; `tests/mirror-gates.sh` proves the gates on a
 throwaway fixture.
 
+## Keeping every repo up to date: `refresh-all.sh`
+
+A repo carries a copy of the template's files, not a link, so a fix here
+reaches a repo only when it is refreshed. `refresh-all.sh` does that for every
+repo on the dev box, from the template's **main** (which only moves once the
+template's own CI is green):
+
+```bash
+~/Projects/_template/refresh-all.sh --dry-run   # what each repo would get
+~/Projects/_template/refresh-all.sh             # refresh, check, push each repo's dev
+```
+
+For each repo whose committed tree has `scripts/check.sh` and whose GitHub
+remote has a `dev`, it clones that `dev` into a scratch folder (never the
+working checkout, so a session's uncommitted or unpushed work is never read or
+carried), runs `new-project.sh --adopt --refresh`, records the template commit
+in `.template-version`, runs `scripts/check.sh fast`, and pushes to `dev` with
+that repo's own token from its `mcp/.env`. The repo's CI tests it like any other
+push, and it reaches `main` at the repo's next release, on the owner's word.
+It never edits a file a repo customizes (workflows, `agent.md`, the README,
+`PUBLISH`): their drift is listed for a person to port, and so are
+`publish.yml`'s pins when the publisher changed. One line per repo; the full log
+is in `~/.local/state/projects-template/`.
+
+Why from the dev box and not from each repo's CI: CI stays read-only (no
+workflow holds a key that can push), no repo stores a credential for another,
+and a repo nobody pushes to still gets a security fix.
+
+The timer (`systemd/projects-template-refresh.{service,timer}`, daily at 06:40,
+`--if-changed` so most days it exits at once) is **off until the owner turns it
+on**, since it pushes to every repo's `dev` by itself:
+
+```bash
+cp ~/Projects/_template/systemd/projects-template-refresh.* ~/.config/systemd/user/
+systemctl --user daemon-reload && systemctl --user enable --now projects-template-refresh.timer
+```
+
+The pre-push hook also says, as a note and never a block, when a repo's
+`.template-version` is behind the template's `main` on this box.
+
 ## Changing the template
 
 The MCP server here is the canonical copy — `~/Projects/_template/skel/mcp`.
@@ -345,7 +385,7 @@ pushing a change:
 
 ```bash
 scripts/check.sh fast   # what the hook runs
-tests/run.sh            # the deploy guard, the mirror gates, and a scaffold smoke test
+tests/run.sh            # the deploy guard, the mirror gates, the kits, refresh-all, a scaffold smoke test
 ```
 
 Its CI (`.github/workflows/ci.yml`, on the runner `projects-template-ci`) runs

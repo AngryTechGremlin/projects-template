@@ -1,0 +1,8 @@
+[Unit]
+Description=Refresh every repo's shared files from projects-template's main (pushes to each repo's dev)
+After=network-online.target
+
+[Service]
+Type=oneshot
+# --if-changed: most days the template's main has not moved, and this exits at once.
+ExecStart=%h/Projects/_template/refresh-all.sh --if-changed

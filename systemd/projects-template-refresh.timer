@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily: bring every repo up to projects-template's main
+
+[Timer]
+# Early, before anyone is working; Persistent catches a day the box was off.
+OnCalendar=*-*-* 06:40
+Persistent=true
+
+[Install]
+WantedBy=timers.target
