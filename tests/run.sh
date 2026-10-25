@@ -262,7 +262,7 @@ smoke() (
   commit "$a" 'chore: add the public-mirror kit'
 
   expect 0 'unchanged: docs/publishing\.md' 'refresh: straight after adopting' "$np" --adopt "$a" --refresh --no-build
-  check "refresh: all 8 managed files unchanged, none rewritten" refreshed_nothing "$out" 8
+  check "refresh: all 13 managed files (5 of them the MCP server's) unchanged, none rewritten" refreshed_nothing "$out" 13
   check "refresh: the tree is still clean" test -z "$(git -C "$a" status --porcelain)"
   printf '# a local edit\n' >>"$a/scripts/check.sh"
   expect 2 'refusing --refresh' 'refresh: refused while a managed file has uncommitted edits' \

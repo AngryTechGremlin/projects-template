@@ -195,6 +195,13 @@ if (( publish )); then
   managed+=(scripts/mirror.sh scripts/sandbox.sh docs/publishing.md)
   customized+=(PUBLISH .github/workflows/publish.yml)
 fi
+# The MCP server's code and lockfile are the template's too (skel/mcp is the
+# canonical copy), so a dependency fix there reaches every repo on a refresh.
+# Its README names the repo, so it is the repo's.
+if (( with_mcp )); then
+  managed+=(mcp/package.json mcp/package-lock.json mcp/tsconfig.json mcp/src/index.ts mcp/src/github-service.ts)
+fi
+mcp_changed=0
 
 # Check the template has every file this run copies before writing anything,
 # so a template mid-edit fails here rather than leaving half a project.
@@ -263,6 +270,7 @@ refresh_one() { # overwrite a managed file with the template's, showing the chan
   if differs "$rel" "$dst" "$rendered"; then
     printf '  %s: %s\n%s\n' "$( ((dry)) && echo 'would refresh' || echo 'refreshed')" "$rel" "$diff_out"
     quiet cp -- "$rendered" "$dst"
+    [[ $rel != mcp/* ]] || mcp_changed=1
   else
     printf '  unchanged: %s\n' "$rel"
   fi
@@ -452,6 +460,9 @@ done. next:
   scripts/check.sh fast        # the checks pre-push and CI run; fix what it finds before pushing
   git status                   # then commit as: chore: refresh shared tooling from the template
 NEXT
+  if (( mcp_changed )); then
+    printf '  (cd mcp && npm ci --ignore-scripts && npm run build)   # the MCP server changed: rebuild it\n'
+  fi
 elif (( adopt )); then
   cat <<NEXT
 
