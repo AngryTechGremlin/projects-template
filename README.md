@@ -84,9 +84,16 @@ same pinned tools, so a red CI run is never news.
   error until marked reviewed; `skel/docs/ci-runner.md` (the deploy guard)
   has the line.
 - **A reviewed exception** is written where the finding is, with the reason:
-  `.gitleaksignore` (by fingerprint), `.trivyignore`, `# zizmor: ignore[...]`,
+  `.gitleaksignore` (by fingerprint), `.trivyignore.yaml`, `# zizmor: ignore[...]`,
   `# shellcheck disable=...`, `# hadolint ignore=...`. Never a weaker pin or a
   skipped check.
+- **A trivy exception names the one file it excuses.** In `.trivyignore.yaml`
+  each entry gives the CVE `id`, `paths` (the binary inside the image, e.g.
+  `usr/local/bin/gosu`), `expired_at` and a `statement` saying why; `check.sh`
+  refuses an entry without the last two. A plain `.trivyignore` would excuse
+  the ID everywhere: Go CVEs repeat across binaries, so excusing an
+  unreachable one in postgres's `gosu` would also hide a reachable one in
+  Caddy (hallpass, 2026-10-25). After `expired_at`, trivy reports it again.
 - A project's own lint and tests (ruff, pytest, playwright, ...) stay in its
   `ci.yml` `check` job; `check.sh` is only what every repo shares.
 

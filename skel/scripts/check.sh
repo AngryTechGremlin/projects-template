@@ -300,6 +300,21 @@ trivy_db() {
 }
 trivy_scan=(--scanners vuln --cache-dir /cache --skip-db-update --skip-java-db-update --offline-scan
   --quiet --disable-telemetry --skip-version-check --severity "HIGH,CRITICAL" --ignore-unfixed --exit-code 1)
+# A reviewed exception goes in .trivyignore.yaml, not a plain .trivyignore: an
+# entry there can name the one file it excuses (paths: one binary inside an
+# image), so excusing gosu in the postgres image does not also hide the same
+# CVE in a Caddy that is reachable. Every entry also needs an expiry, after
+# which trivy reports the finding again, and a statement saying why.
+trivy_ignore() {
+  [[ -f .trivyignore.yaml ]] || return 0
+  local ids exp why
+  ids=$(grep -cE '^[[:space:]]*-[[:space:]]+id:' .trivyignore.yaml || true)
+  exp=$(grep -cE '^[[:space:]]+expired_at:[[:space:]]*[0-9]{4}-[0-9]{2}-[0-9]{2}' .trivyignore.yaml || true)
+  why=$(grep -cE '^[[:space:]]+statement:[[:space:]]*[^[:space:]]' .trivyignore.yaml || true)
+  (( ids > 0 && exp == ids && why == ids )) \
+    || setup ".trivyignore.yaml: each of its $ids entries needs an expired_at date and a statement saying why"
+  trivy_scan+=(--ignorefile "$root/.trivyignore.yaml")
+}
 
 check_trivy_fs() {
   local skip=() p
@@ -341,13 +356,14 @@ run() { # <name> <how to fix> <check function> [args...]
 
 if [[ $tier == vuln ]]; then
   trivy_db
+  trivy_ignore
   run "trivy lockfiles" \
-    "upgrade each package listed to its fixed version; a reviewed exception goes in .trivyignore with a comment saying why" \
+    "upgrade each package listed to its fixed version; a reviewed exception goes in .trivyignore.yaml (paths, expired_at, statement)" \
     check_trivy_fs
   read -ra images <<<"${CHECK_IMAGES:-}"
   for img in "${images[@]}"; do
     run "trivy image $img" \
-      "rebuild on a patched base image, or upgrade the packages listed" \
+      "rebuild on a patched base image, or upgrade the packages listed; a reviewed exception goes in .trivyignore.yaml, scoped to the one binary by paths, with expired_at and statement" \
       check_trivy_image "$img"
   done
 else
