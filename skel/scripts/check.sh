@@ -272,6 +272,30 @@ check_hadolint() {
   box "$HADOLINT_IMAGE" /bin/hadolint --no-color "${df[@]}" || verdict $?
 }
 
+# A Dockerfile that copies its whole build context (COPY . .) takes whatever
+# is lying in the folder unless a .dockerignore says otherwise: a local .venv,
+# node_modules, .env, data/. hallpass's api image once carried a dev venv's
+# old certifi (a CRITICAL) that way. So every such Dockerfile needs a
+# .dockerignore beside it (or BuildKit's <Dockerfile>.dockerignore).
+check_dockerignore() {
+  local f dir bad=0 seen=0
+  while IFS= read -r -d '' f; do
+    [[ $f == *.dockerignore ]] && continue
+    # COPY or ADD of "." or "./", flags allowed, but not --from: that copies
+    # from another stage, not from the folder.
+    grep -qiE '^[[:space:]]*(COPY|ADD)[[:space:]]+(--[a-z-]+(=[^[:space:]]+)?[[:space:]]+)*\.\/?[[:space:]]' "$f" || continue
+    grep -iE '^[[:space:]]*(COPY|ADD)[[:space:]]' "$f" | grep -qviE -- '--from' || continue
+    seen=$((seen + 1))
+    dir=$(dirname -- "$f")
+    if [[ ! -f $dir/.dockerignore && ! -f $f.dockerignore ]]; then
+      echo "$f copies its whole folder, and $dir has no .dockerignore"
+      bad=1
+    fi
+  done < <(files ':(glob)**/Dockerfile*' ':(glob)**/Containerfile*' ':(glob)**/*.Dockerfile')
+  note="$(count "$seen" Dockerfile) copying its folder"
+  return "$bad"
+}
+
 # The vulnerability database is fetched by a container that has a network and
 # no repo; the scan runs in one that has the repo and no network. So nothing
 # about the project can leave, whatever the scanner does. Only HIGH/CRITICAL
@@ -401,6 +425,9 @@ else
     run "hadolint" \
       "pin the base image to a version (better, a digest) and the packages installed; a reviewed exception is a '# hadolint ignore=DLxxxx' comment saying why" \
       check_hadolint
+    run ".dockerignore" \
+      "add a .dockerignore beside each one listed, naming what an image must never carry: .git, .env*, data/, .venv, node_modules, build and test output" \
+      check_dockerignore
   fi
 fi
 
