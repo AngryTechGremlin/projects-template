@@ -20,7 +20,9 @@ trap 'rm -rf -- "$t"' EXIT
 export PROJECTS_DIR=$t/projects XDG_STATE_HOME=$t/state REFRESH_TEMPLATE_REF=HEAD
 mkdir -p -- "$PROJECTS_DIR"
 ver=$(git -C "$tpl" rev-parse HEAD)
-old=$(git -C "$tpl" rev-parse HEAD~1)
+# Any other commit id will do as "an older template": CI checks out only the
+# commit under test, so there is no real HEAD~1 to name.
+old=0000000000000000000000000000000000000001
 # Fixture commits skip the hooks: they are the stand-in history, not the test.
 g() { git -c user.name=AngryTechGremlin -c user.email=AngryTechGremlin@users.noreply.github.com -c core.hooksPath=/dev/null "$@"; }
 
