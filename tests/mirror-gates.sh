@@ -299,6 +299,16 @@ commit -m 'docs: x'
 expect 0 '.' "Docker's host.docker.internal names no one's house" check
 
 on_case
+printf 'scripts/pii-scan.local\n.env.local\n' >>"$priv/.gitignore"
+commit -m 'chore: x'
+expect 0 '.' "the file names pii-scan.local and .env.local are not hosts" check
+
+on_case
+printf 'Ask nas.local, the box.\n' >>"$priv/README.md"
+commit -m 'docs: x'
+expect 1 'internal host name' '  ...but a real .local host still fails' check
+
+on_case
 printf 'Try host.docker.internal, else example-box.lan.\n' >>"$priv/README.md"
 commit -m 'docs: x'
 expect 1 'internal host name' '  ...but another internal name on the same line still fails' check

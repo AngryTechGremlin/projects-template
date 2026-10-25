@@ -224,7 +224,9 @@ not_allowed_emails() {
 # machine, so they name no one's house. Like the emails: a hit stays when any
 # other internal name is on the line.
 internal_re='[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.(lan|local|internal|home\.arpa)\.?([^A-Za-z0-9.-]|$)'
-internal_ok='^(host|gateway)\.docker\.internal'
+# Two file names end in .local without naming a host: this scan's own word
+# list and the usual .env.local (chorebank, Book Companion's .gitignore).
+internal_ok='^((host|gateway)\.docker\.internal|pii-scan\.local|env\.local)'
 not_docker_names() {
   local line body
   while IFS= read -r line; do
