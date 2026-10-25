@@ -8,8 +8,11 @@
 #
 #   HARD  credential shapes that are never a coincidence -- GitHub/OpenAI/
 #         Anthropic/AWS/Google/npm/Slack keys, JWTs (a Home Assistant
-#         long-lived token is one), Tailscale keys, PEM private key blocks.
-#         Scanned everywhere, scripts/pii-scan.exclude included; only this
+#         long-lived token is one), Tailscale keys, PEM private key blocks,
+#         and email addresses (in the house's apps an email is how a person
+#         signs in), all but ones that belong to no one: GitHub noreply, any
+#         noreply@ address, the example domains, .invalid, .test, .localhost,
+#         or on a line that says it is an example. Scanned everywhere, scripts/pii-scan.exclude included; only this
 #         script and the hook, which quote the patterns, are skipped. A hit
 #         here is real; rotate the credential.
 #
@@ -42,8 +45,8 @@
 #         structural exemptions above remain. It also refuses shapes that are
 #         harmless in a private repo but say where the house is once public:
 #         CGNAT (Tailscale) and private IPv6 addresses, .lan/.local/.internal/
-#         .home.arpa host names, any email address but GitHub's noreply ones
-#         and the example domains, and a secret assigned an unquoted literal.
+#         .home.arpa host names, an email on a line that only says it is an
+#         example, and a secret assigned an unquoted literal.
 #
 #   PII_SCAN_BLOCKLIST=<file>  also refuse any line holding one of the file's
 #         fixed strings, in any case: the owner's names, hosts and addresses
@@ -196,7 +199,7 @@ scan soft 'GPS coordinates' \
 # false alarm here costs a rewrite of the line, which is the cheap direction.
 # Every address but GitHub's noreply ones and the reserved example domains.
 email_re='[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}'
-email_ok='^([A-Za-z0-9._%+-]+@users\.noreply\.github\.com|noreply@github\.com|git@github\.com|[A-Za-z0-9._%+-]+@(example\.(com|org|net)|[A-Za-z0-9.-]+\.example))$'
+email_ok='^([A-Za-z0-9._%+-]+@users\.noreply\.github\.com|no-?reply@[A-Za-z0-9.-]+|git@github\.com|[A-Za-z0-9._%+-]+@(example\.(com|org|net)|[A-Za-z0-9.-]+\.(example|invalid|test|localhost)))$'
 # Keep a hit only when one address on the line is not an allowed one: a
 # line-wide skip would let a noreply address excuse a real one beside it.
 not_allowed_emails() {
@@ -218,6 +221,16 @@ not_docker_names() {
     if grep -oE -- "$internal_re" <<<"$body" | grep -qvE -- "$internal_ok"; then printf '%s\n' "$line"; fi
   done
 }
+# Both modes, hard, so tests too: in the house's apps an email is how a person
+# signs in (hallpass), and a real one belongs in a database row typed by hand,
+# never in a file. Reserved names always pass (example domains, .invalid,
+# .test, .localhost, GitHub's noreply); a private repo also takes a line that
+# says it is an example at its word, a public copy does not.
+email_skip=''
+(( public )) || email_skip=$placeholder
+scan hard 'email address (only noreply, example and reserved-domain ones)' \
+  "$email_re" "$email_skip" not_allowed_emails
+
 if (( public )); then
   scan hard 'CGNAT (Tailscale) host address' \
     "\\b100\\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\\.$o\\.$h\\b"
@@ -225,8 +238,6 @@ if (( public )); then
     '\b([fF][dD][0-9a-fA-F]{2}|[fF][eE]80):[0-9a-fA-F:]*:[0-9a-fA-F]+'
   scan hard 'internal host name (.lan, .local, .internal, .home.arpa; not Docker'"'"'s host.docker.internal)' \
     '[A-Za-z0-9-]\.(lan|local|internal|home\.arpa)\.?([^A-Za-z0-9.-]|$)' '' not_docker_names
-  scan hard 'email address (only @users.noreply.github.com and example domains go public)' \
-    "$email_re" '' not_allowed_emails
   # Config-file shape: the whole value one unquoted run with a digit in it, so
   # code such as `token = get_token` or `password = DEFAULT_PASSWORD` passes.
   scan hard 'password/secret assigned an unquoted literal' \

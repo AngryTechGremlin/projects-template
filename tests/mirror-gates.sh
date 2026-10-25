@@ -246,11 +246,19 @@ expect 1 'RFC1918' 'an RFC1918 address under tests/' check
 check "  ...which the private scan exempts as a test path" bash -c 'cd "$1" && scripts/pii-scan.sh >/dev/null' _ "$priv"
 
 on_case
-printf 'The box is %s, mail pat@mail.test, the share example-box.lan.\n' "$(printf '100.%d.%d.%d' 101 102 103)" >>"$priv/README.md"
+# The address is built here, so this file holds no address of its own.
+printf 'The box is %s, mail %s, the share example-box.lan.\n' "$(printf '100.%d.%d.%d' 101 102 103)" \
+  "$(printf 'pat@%s.%s' mailbox net)" >>"$priv/README.md"
 commit -m 'docs: x'
 expect 1 'CGNAT' 'public-only shapes: a CGNAT address, an email, a .lan name' check
 check "  ...each one named" bash -c 'grep -q "email address" "$1" && grep -q "internal host name" "$1"' _ "$t/out.$n"
-check "  ...which the private scan lets through" bash -c 'cd "$1" && scripts/pii-scan.sh >/dev/null' _ "$priv"
+check "  ...which the private scan lets through (the line says it is an example)" bash -c 'cd "$1" && scripts/pii-scan.sh >/dev/null' _ "$priv"
+
+on_case
+printf 'Questions go to %s.\n' "$(printf 'pat@%s.%s' mailbox net)" >>"$priv/README.md"
+check "an email on a plain line: the private scan refuses it too" bash -c 'cd "$1" && ! scripts/pii-scan.sh >/dev/null 2>&1' _ "$priv"
+printf 'Ask %s, or %s.\n' "$(printf 'noreply@%s.%s' mailbox net)" "$(printf 'pat@%s' box.invalid)" >"$priv/README.md"
+check "  ...but noreply@ and a reserved domain pass" bash -c 'cd "$1" && scripts/pii-scan.sh >/dev/null 2>&1' _ "$priv"
 
 on_case
 printf 'GATEWAY_URL = "http://host.docker.internal:4000/v1"\n' >>"$priv/README.md"
