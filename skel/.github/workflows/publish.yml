@@ -63,7 +63,7 @@ jobs:
       - name: the publisher is the reviewed one
         run: |
           sha256sum --check --strict <<'EOF'
-          08a8f283cc291bc65d58c508402eb41c75b6dc93a44a0f4c0e6d08418b6f6b62  scripts/mirror.sh
+          65435248086637991c7a995bbfaaa5419394522fcc1c6ca1848f856a7d74a076  scripts/mirror.sh
           b128be5d0d5e531cf1fb2e3aeaa88e63077d8e12c65fa616ce41326caf5caa89  scripts/pii-scan.sh
           EOF
 
@@ -86,7 +86,7 @@ jobs:
       - name: the publisher is the reviewed one
         run: |
           sha256sum --check --strict <<'EOF'
-          08a8f283cc291bc65d58c508402eb41c75b6dc93a44a0f4c0e6d08418b6f6b62  scripts/mirror.sh
+          65435248086637991c7a995bbfaaa5419394522fcc1c6ca1848f856a7d74a076  scripts/mirror.sh
           b128be5d0d5e531cf1fb2e3aeaa88e63077d8e12c65fa616ce41326caf5caa89  scripts/pii-scan.sh
           EOF
 

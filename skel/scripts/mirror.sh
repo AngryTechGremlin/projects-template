@@ -372,7 +372,9 @@ if (( ${#login} >= 4 )); then
 else
   echo "mirror: the login name is under 4 characters and is not added to the blocklist" >&2
 fi
-sort -u -o "$bl" "$bl"
+# Bytewise: a locale's collation can rank entries that differ only in
+# punctuation (name. and name-) equal, and -u would drop one unchecked.
+LC_ALL=C sort -u -o "$bl" "$bl"
 echo "blocklist: $(wc -l <"$bl" | tr -d ' ') entries"
 
 # (12, run here.) A path is printed by every gate below, so names are checked

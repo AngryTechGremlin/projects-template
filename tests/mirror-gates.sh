@@ -221,6 +221,10 @@ expect 1 'README\.md:4' 'the word in a published file' check
 # The byte-order mark some editors put first must not hide the first entry.
 printf '\357\273\277Zorblatt-House\n' >"$t/bl-bom"
 BL=$t/bl-bom expect 1 'README\.md:4' 'the word, with a byte-order mark before its blocklist entry' check
+# Entries that differ only in punctuation are two entries, though a locale's
+# collation ranks them equal (glibc 2.43, en_US.UTF-8: sort -u kept the first).
+printf 'Zorblatt.House\nZorblatt-House\n' >"$t/bl-punct"
+LC_ALL=en_US.UTF-8 BL=$t/bl-punct expect 1 'README\.md:4' 'the word, after an entry that differs from it only in punctuation' check
 
 on_case
 printf 'notes\n' >"$priv/docs/$word-notes.md"

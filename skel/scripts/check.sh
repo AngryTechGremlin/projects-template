@@ -92,11 +92,13 @@ count() { printf '%d %s' "$1" "$2"; (( $1 == 1 )) || printf s; }
 
 # Files a commit would carry: tracked, plus untracked but not ignored, so a
 # brand-new repo with nothing committed is still checked, and .env never is.
+# Sorted bytewise: a locale's sort -u drops names that differ only in
+# punctuation (a-b.sh beside a.b.sh).
 files() { # [pathspec...]
   local f
   while IFS= read -r -d '' f; do
     if [[ -f $f ]]; then printf '%s\0' "$f"; fi   # a deleted-but-tracked path is not a file
-  done < <(git ls-files -z --cached --others --exclude-standard -- "$@" | sort -zu)
+  done < <(git ls-files -z --cached --others --exclude-standard -- "$@" | LC_ALL=C sort -zu)
 }
 
 if [[ -n ${CHECK_RANGE:-} ]]; then
