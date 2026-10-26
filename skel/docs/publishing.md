@@ -126,8 +126,7 @@ The patterns in `scripts/pii-scan.sh` catch shapes: addresses, keys, tokens.
 They cannot know the house's own words. The blocklist holds those.
 
 - **Where:** `~/.config/publish/blocklist` on the CI box, for the runner's
-  user. Mode 600. Written by the owner by hand. Never in a repo, a commit
-  message, an issue, or a session.
+  user. Mode 600. Never in a repo, a commit message or an issue.
 - **Format:** one fixed string per line, matched anywhere in a line, in any
   case. `#` starts a comment; blank lines, surrounding spaces, CRs and a
   leading byte-order mark are ignored. Each entry is at least 4 characters:
@@ -138,14 +137,24 @@ They cannot know the house's own words. The blocklist holds those.
   (`name.`, `name-`, the full domain name); the house domain; the LAN prefixes
   (`192.168.N.`); the WAN address; Wi-Fi names; real MACs and serials;
   family full names and surnames; personal email addresses and their local
-  parts; street and coordinate fragments; and `github.com/AngryTechGremlin/`,
-  which catches links to private repos.
+  parts; street and coordinate fragments; the names, addresses and phone
+  numbers of any customer whose data a repo has seen; and
+  `github.com/AngryTechGremlin/`, which catches links to private repos.
+- A short entry also matches inside code and encoded data (`Mark` is in
+  `bookmark`; any four letters turn up in a base64 font). Keep a short
+  name that matters and read a hit's line before believing it; drop a short
+  one that names little.
 - The login name of whoever runs the script is added on its own.
 - **A hit prints as `file:line` only**, or for a name, its place in
   `PUBLISH`. Never the line, never the entry: CI logs live on GitHub. The
   owner opens the file at that line to see it.
-- **Sessions never read it.** Add a Read deny for `~/.config/publish/**` to
-  Claude Code's settings. A session that meets a hit asks the owner.
+- **A session builds it on the owner's word** (the owner's call, 2026-10-25):
+  from what the house's gitignored files (`pi.md`, `.env`) and its memory
+  already know, then from the box itself (host name, Wi-Fi names, account
+  name), with each entry counted in the files that would go public and in
+  every repo's tracked files, so a false alarm is caught before a publish
+  meets it. The list then sits in that session's transcript; outside such a
+  request, a session never reads it, and one that meets a hit asks the owner.
 - Missing, empty, or holding a too-short entry: exit 2. The check job goes
   red and nothing publishes.
 
