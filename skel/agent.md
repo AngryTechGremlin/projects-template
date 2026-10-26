@@ -56,7 +56,8 @@ and adds only what is personal to this machine.
   `scripts/mirror.sh`, and only on the owner's click (§5). A session never
   pushes anywhere but origin (the hook refuses any other URL) and never adds a
   public remote. **Never read the publish blocklist**
-  (`~/.config/publish/blocklist`): a hit prints as `file:line` only, so open
+  (`~/.config/publish/blocklist`) unless the owner has asked this session to
+  build it (`docs/publishing.md`): a hit prints as `file:line` only, so open
   that line, and if the problem is not plain, ask the owner. Never paste house
   logs, hostnames, addresses or command output into a public issue or PR
   reply: nothing checks what is typed there.
