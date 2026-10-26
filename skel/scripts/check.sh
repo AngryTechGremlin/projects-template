@@ -324,12 +324,9 @@ trivy_db() {
   dbs=(--tmpfs /cache -v "$trivy_cache/db:/cache/db:ro")
   if [[ -d $trivy_cache/java-db ]]; then dbs+=(-v "$trivy_cache/java-db:/cache/java-db:ro"); fi
 }
-# --include-dev-deps: a project's dev dependencies (test runners, bundlers,
-# browsers) are what CI installs and runs on the house's CI box, so they are
-# scanned too, not only what ships (teaching-tools' playwright).
 trivy_scan=(--scanners vuln --cache-dir /cache --skip-db-update --skip-java-db-update --offline-scan
   --quiet --disable-telemetry --skip-version-check --severity "HIGH,CRITICAL" --ignore-unfixed
-  --include-dev-deps --exit-code 1)
+  --exit-code 1)
 # A reviewed exception goes in .trivyignore.yaml, not a plain .trivyignore: an
 # entry there can name the one file it excuses (paths: one binary inside an
 # image), so excusing gosu in the postgres image does not also hide the same
@@ -361,7 +358,11 @@ check_trivy_fs() {
     ':(glob)**/go.sum' ':(glob)**/Cargo.lock' ':(glob)**/Gemfile.lock' ':(glob)**/composer.lock' \
     ':(glob)**/gradle.lockfile' | tr -cd '\0' | wc -c)
   if (( n == 0 )); then note="no lockfiles in this repo"; else note=$(count "$n" lockfile); fi
-  box "${dbs[@]}" "$TRIVY_IMAGE" fs "${trivy_scan[@]}" "${skip[@]}" . || verdict $?
+  # --include-dev-deps: a project's dev dependencies (test runners, bundlers,
+  # browsers) are what CI installs and runs on the house's CI box, so they are
+  # scanned too, not only what ships (teaching-tools' playwright). The lockfile
+  # scan only: `trivy image` refuses the flag, and an image holds what ships.
+  box "${dbs[@]}" "$TRIVY_IMAGE" fs "${trivy_scan[@]}" --include-dev-deps "${skip[@]}" . || verdict $?
 }
 
 check_trivy_image() { # <image>
