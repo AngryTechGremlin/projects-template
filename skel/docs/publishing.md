@@ -126,9 +126,8 @@ The patterns in `scripts/pii-scan.sh` catch shapes: addresses, keys, tokens.
 They cannot know the house's own words. The blocklist holds those.
 
 - **Where:** `~/.config/publish/blocklist` on the CI box, for the runner's
-  user. Mode 600. Written by the owner, by hand or by answering
-  `~/Projects/_template/publish/add-to-blocklist.sh` in their own terminal.
-  Never in a repo, a commit message, an issue, or a session.
+  user. Mode 600. Written by the owner by hand. Never in a repo, a commit
+  message, an issue, or a session.
 - **Format:** one fixed string per line, matched anywhere in a line, in any
   case. `#` starts a comment; blank lines, surrounding spaces, CRs and a
   leading byte-order mark are ignored. Each entry is at least 4 characters:

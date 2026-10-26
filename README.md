@@ -301,15 +301,6 @@ half on the public repo, private half as the `PUBLIC_DEPLOY_KEY` secret), and
 `--done` proves GitHub took it before shredding the private half
 (`skel/docs/publishing.md`, "The deploy key").
 
-`publish/add-to-blocklist.sh` fills the publish blocklist by asking the owner
-questions in their own terminal; it refuses to run anywhere else, so the
-answers never pass through a session or a log. It offers what the box already
-knows (its name, saved Wi-Fi networks, the names in `~/.ssh/config`,
-`/etc/hosts` and the tailnet, house host names and email addresses in the
-projects' `.env` files), asks for what no box knows (names, handles, street,
-town, phone numbers), and writes nothing until the owner confirms the list
-(`skel/docs/publishing.md`, "The blocklist").
-
 A deploy job runs on prod's runner, and its first step is the same line in
 every repo:
 
