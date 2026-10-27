@@ -20,9 +20,9 @@ A portable Model Context Protocol (MCP) server that allows AI agents to interact
   |---|---|---|
   | Contents | Read and write | `git push` through `scripts/git-credential-github.sh` |
   | Issues | Read and write | `get_issue`, `create_comment` |
-  | Pull requests | Read-only (Read and write to comment on PRs) | `list_pull_requests` |
+  | Pull requests | Read and write | `list_pull_requests`, comments on PRs, and the release PR `scripts/release.sh` opens |
   | Metadata | Read-only (always on) | `list_repositories` |
-  | Actions | Read-only | a session can see whether CI passed, and why not |
+  | Actions | Read-only | a session can see whether CI passed, and why not; `scripts/release.sh` waits on it |
 
   `search_code` works with this set. **Never Actions: Read and write:** it
   would let a session start a workflow, and publishing a public copy is a

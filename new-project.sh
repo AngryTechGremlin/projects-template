@@ -150,9 +150,10 @@ mcp_files=(
   .mcp.json
   .vscode/mcp.json
   .claude/settings.json
-  # Reads the PAT from mcp/.env, so it belongs with MCP rather than in shared:
-  # a --no-mcp project would get a helper with nothing to read.
+  # Both read the PAT from mcp/.env, so they belong with MCP rather than in
+  # shared: a --no-mcp project would get scripts with nothing to read.
   scripts/git-credential-github.sh
+  scripts/release.sh
 )
 docs=(
   agent.md
@@ -199,7 +200,8 @@ fi
 # canonical copy), so a dependency fix there reaches every repo on a refresh.
 # Its README names the repo, so it is the repo's.
 if (( with_mcp )); then
-  managed+=(mcp/package.json mcp/package-lock.json mcp/tsconfig.json mcp/src/index.ts mcp/src/github-service.ts)
+  managed+=(mcp/package.json mcp/package-lock.json mcp/tsconfig.json mcp/src/index.ts mcp/src/github-service.ts
+    scripts/release.sh)
 fi
 mcp_changed=0
 pins_changed=0

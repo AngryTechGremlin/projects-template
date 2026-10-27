@@ -68,8 +68,9 @@ A working checkout is the clone **plus** the gitignored files git never carries.
 1. `git clone https://github.com/{{OWNER}}/{{PROJECT}} ~/Projects/{{PROJECT}}`
 2. `cd mcp && npm install && npm run build`, then `cp .env.example .env` and put
    a fine-grained GitHub token in it, scoped to `{{OWNER}}/{{PROJECT}}` alone,
-   with the permissions `mcp/README.md` lists, plus Actions: Read-only so a
-   session can see CI results (never Actions write; Workflows stays off).
+   with the permissions `mcp/README.md` lists: among them Actions: Read-only
+   so a session can see CI results, and Pull requests: Read and write for the
+   release PR (never Actions write; Workflows stays off).
    Create the repo on GitHub first: a fine-grained token can only name a repo
    that exists.
    Restart the agent session so `.mcp.json` is picked up.
@@ -89,9 +90,15 @@ rather than assume.
 ## 5. Branching & release gate
 > TODO({{PROJECT}}): pick one and delete the other.
 - **Single-branch:** work on `main`, push freely — CI validates, nothing ships.
-- **dev/main:** work on `dev`; **merging `main` is the release.** Only by PR,
-  only with explicit per-release approval from the owner ("ready to release?" →
-  wait). Approval for one release never carries over to the next.
+- **dev/main:** work on `dev`; **moving `main` is the release.** Only with
+  explicit per-release approval from the owner ("ready to release?" → wait;
+  `scripts/release.sh --dry-run` shows what would go). Approval for one release
+  never carries over to the next. Then `scripts/release.sh`, and nothing else:
+  it opens the dev → main PR as the record, fast-forwards `main` to the dev
+  commit CI passed, and waits for CI and the deploy on `main`. **Never a merge
+  button or the merge API:** every merge method rewrites the commits under an
+  identity GitHub picks (hallpass, 2026-10-27). A release that stops says why;
+  fix that on `dev`, never around the script.
 
 **Publishing a public copy is not part of a release** (only where `PUBLISH`
 exists). A push to `main` publishes nothing: the owner reads the publish check

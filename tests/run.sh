@@ -9,6 +9,7 @@
 #   3. tests/runner-kit.sh    runners/add-runner.sh refuses what it must, offline
 #      tests/publish-key.sh   publish/add-public-key.sh makes one private key, offline
 #      tests/refresh-all.sh   refresh-all.sh updates a repo's dev, never its checkout
+#      tests/release.sh       scripts/release.sh's gates, against a fake GitHub API
 #   4. the scaffold smoke     new-project.sh as a person runs it (new with
 #      test, below            --publish, --adopt, --adopt --publish, --adopt
 #                             --refresh) into a scratch folder, then the
@@ -142,10 +143,11 @@ smoke() (
     docs/ci-runner.md docs/publishing.md PUBLISH .githooks/pre-push
     .github/workflows/ci.yml .github/workflows/weekly.yml .github/workflows/publish.yml
     scripts/pii-scan.sh scripts/pii-scan.exclude scripts/check.sh scripts/check-tools.env
-    scripts/git-credential-github.sh scripts/mirror.sh scripts/sandbox.sh mcp/README.md mcp/package.json)
+    scripts/git-credential-github.sh scripts/release.sh scripts/mirror.sh scripts/sandbox.sh mcp/README.md
+    mcp/package.json)
   private=(.env pi.md mcp/.env)
   execs=(.githooks/pre-push scripts/pii-scan.sh scripts/check.sh scripts/git-credential-github.sh
-    scripts/mirror.sh scripts/sandbox.sh)
+    scripts/release.sh scripts/mirror.sh scripts/sandbox.sh)
   kit=(PUBLISH scripts/mirror.sh scripts/sandbox.sh .github/workflows/publish.yml docs/publishing.md)
 
   # A flag that would hand one repo another's token is gone. --dir keeps even
@@ -263,7 +265,7 @@ smoke() (
   commit "$a" 'chore: add the public-mirror kit'
 
   expect 0 'unchanged: docs/publishing\.md' 'refresh: straight after adopting' "$np" --adopt "$a" --refresh --no-build
-  check "refresh: all 13 managed files (5 of them the MCP server's) unchanged, none rewritten" refreshed_nothing "$out" 13
+  check "refresh: all 14 managed files (6 of them the MCP kit's) unchanged, none rewritten" refreshed_nothing "$out" 14
   check "refresh: the tree is still clean" test -z "$(git -C "$a" status --porcelain)"
   printf '# a local edit\n' >>"$a/scripts/check.sh"
   expect 2 'refusing --refresh' 'refresh: refused while a managed file has uncommitted edits' \
@@ -302,6 +304,7 @@ suite "mirror gates" bash "$tpl/tests/mirror-gates.sh"
 suite "runner kit" bash "$tpl/tests/runner-kit.sh"
 suite "publish key" bash "$tpl/tests/publish-key.sh"
 suite "refresh all" bash "$tpl/tests/refresh-all.sh"
+suite "release" bash "$tpl/tests/release.sh"
 suite "scaffold smoke" smoke
 
 printf '\n=== summary\n'

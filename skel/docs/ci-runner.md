@@ -174,5 +174,5 @@ asks the Actions API for a green CI run of that exact commit, and if there is
 one the other jobs are skipped and the run still ends green — what a deploy
 triggered by CI waits for. Anything else runs everything: a push to any other
 branch, a PR, a commit not yet green (a merge or squash on `main` makes one),
-or the API not answering. Releases should fast-forward `main` to the tested
-commit so the skip applies.
+or the API not answering. `scripts/release.sh` releases by that fast-forward,
+so the skip applies; a merge button never does.

@@ -27,6 +27,7 @@ this directory as *not one of them*.
 | `scripts/check.sh` + `scripts/check-tools.env` | The house checks, one entry point for agents, the pre-push hook and CI (below). `check-tools.env` holds the tools' digest pins, not settings or secrets. |
 | `.githooks/pre-push` | Refuses a push to any URL but origin's, then runs `scripts/check.sh fast` on exactly the commits being pushed, so forgetting is not an option (`core.hooksPath`). |
 | `scripts/git-credential-github.sh` | Answers git's HTTPS prompt from the same gitignored `mcp/.env` the MCP server reads, so a push needs no second copy of the token and none lands in `.git/config`. It reads the host git asks about and answers **only** `https://github.com` — a helper that skips that check hands the token to any remote, rewrite or submodule URL. MCP projects only; `new-project.sh` wires it. |
+| `scripts/release.sh` | The release, as a script (below). MCP projects only: it reads the same token. |
 | `.github/workflows/ci.yml` | CI on the project's own runner on the house's CI box (`docs/ci-runner.md`): `scripts/check.sh full` always, a stack-specific job to fill in, and a push to `main` of a commit already green skips the checks. Every `uses:` pinned to a full commit SHA. |
 | `.github/workflows/weekly.yml` | `scripts/check.sh vuln` every Monday and on demand: a new advisory arrives without any commit. |
 | `docs/ci-runner.md` | How to add and remove the project's runner, why it can never be handed a deploy, and the deploy guard. |
@@ -226,7 +227,8 @@ placeholder (`--reuse-token`, which copied one, is gone).
    | Permission | Access | Why |
    |---|---|---|
    | Contents | Read and write | `git push` |
-   | Issues, Pull requests, Metadata | as `skel/mcp/README.md` lists | the MCP tools |
+   | Issues, Metadata | as `skel/mcp/README.md` lists | the MCP tools |
+   | Pull requests | Read and write | the MCP tools, and the release PR `scripts/release.sh` opens |
    | Actions | **Read-only** | a session can see whether CI passed, and why not |
    | Workflows | **Read and write only for a push that changes a workflow**, then back to No access | the first push carries `.github/workflows/`, and GitHub refuses a push that creates or changes a workflow file without it |
 
@@ -348,6 +350,36 @@ It is opt-in because an unused publisher in every repo is attack surface.
 first-publish checklist; `tests/mirror-gates.sh` proves the gates on a
 throwaway fixture.
 
+## Releasing: `scripts/release.sh`
+
+A release used to be a sentence in `agent.md` and in `docs/ci-runner.md`:
+"fast-forward `main` to the tested commit". On 2026-10-27 a session released
+hallpass through GitHub's merge API instead. GitHub rewrote all 15 commits
+with the owner's real name and address as committer, `check.sh` refused them
+on `main`, CI went red, the deploy was skipped, and putting it right took a
+force-push of `main` on the owner's word. Every merge method (rebase, squash,
+merge commit) stamps an identity GitHub picks. So the mechanics are now a
+script, and the only judgement left is the owner's yes:
+
+```bash
+scripts/release.sh --dry-run    # gates 1–3 and the commit list: what to show the owner
+scripts/release.sh              # after the owner's yes for this release
+```
+
+It stops at the first gate that fails and says why: **ready** (on `dev`, clean,
+pushed, `main` can fast-forward), **tested** (ci.yml green on that exact
+commit), **clean** (`scripts/check.sh fast` on what `main` would gain), **on
+record** (opens or updates the dev → main PR, its body the commit list),
+**release** (`git push origin <sha>:main`, never `--force`, so git refuses
+anything but a fast-forward; GitHub marks the PR merged by itself), and
+**proof** (CI on `main`, then `deploy.yml`'s run for that commit where there
+is one; exit 0 only on green, with the links). It never calls the merge API.
+Run it again after a timeout and it goes straight to the proof.
+
+It needs the token's **Pull requests: Read and write**. Tokens made before
+2026-10-27 have Read-only, and the script stops at the PR with that fix. Its
+test (`tests/release.sh`) plays GitHub's API with a fake `curl`, offline.
+
 ## Keeping every repo up to date: `refresh-all.sh`
 
 A repo carries a copy of the template's files, not a link, so a fix here
@@ -396,14 +428,15 @@ it. When three projects have made the same edit to a scaffolded file, that edit
 belongs in `skel/`.
 
 The template is itself a private repo (`AngryTechGremlin/projects-template`;
-`dev` is the work branch), checked by the scripts it hands out:
-`scripts/pii-scan.sh` and `scripts/check.sh` at the root are links into
-`skel/scripts/`, and `scripts/pii-scan.exclude` is the template's own. Before
+`dev` is the work branch), checked and released by the scripts it hands out:
+`scripts/pii-scan.sh`, `scripts/check.sh` and `scripts/release.sh` at the root
+are links into `skel/scripts/`, and `scripts/pii-scan.exclude` is the
+template's own. Before
 pushing a change:
 
 ```bash
 scripts/check.sh fast   # what the hook runs
-tests/run.sh            # the deploy guard, the mirror gates, the kits, refresh-all, a scaffold smoke test
+tests/run.sh            # the deploy guard, the mirror gates, the kits, refresh-all, release, a scaffold smoke test
 ```
 
 Its CI (`.github/workflows/ci.yml`, on the runner `projects-template-ci`) runs
