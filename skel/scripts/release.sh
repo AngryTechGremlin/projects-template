@@ -115,7 +115,7 @@ import json, sys
 runs = json.load(sys.stdin).get("workflow_runs", [])
 green = [r for r in runs if r.get("conclusion") == "success"]
 r = (green or runs or [None])[0]
-print("none - - -" if r is None else "%s %s %s %s" % (r["status"], r.get("conclusion") or "-", r["id"], r["html_url"]))'
+print("none - - - -" if r is None else "%s %s %s %s %s" % (r["status"], r.get("conclusion") or "-", r["id"], r["created_at"], r["html_url"]))'
 
 # why <run id>: the failed jobs and steps, and the end of the first one's log.
 why() {
@@ -138,13 +138,14 @@ for j in json.load(sys.stdin).get("jobs", []):
 }
 
 # watch <workflow file> <query> <label>: wait until the run of that workflow
-# for this commit is done, then pass on green and stop on anything else.
+# for this commit is done, then pass on green and stop on anything else. The
+# run's creation time stays in $created, for the proof.
 watch() {
   local wf=$1 query=$2 label=$3 deadline=$((SECONDS + timeout * 60)) said=
   local status conclusion id link
   while :; do
     get "/actions/workflows/$wf/runs?head_sha=$sha$query&per_page=20" "Actions: Read-only"
-    read -r status conclusion id link <<<"$(py "$pick_run" <"$tmp/resp")"
+    read -r status conclusion id created link <<<"$(py "$pick_run" <"$tmp/resp")"
     if [[ $status == completed ]]; then
       [[ $conclusion == success ]] && { ok "$label ($link)"; return 0; }
       printf 'STOP %s: %s\n     %s\n' "$label" "$conclusion" "$link"
@@ -167,7 +168,12 @@ watch() {
 proof() {
   watch ci.yml "&branch=main&event=push" "proof: ci on main"
   if git cat-file -e "$sha:.github/workflows/deploy.yml" 2>/dev/null; then
-    watch deploy.yml "&branch=main" "proof: deploy"
+    # No branch filter: GitHub files a workflow_run deploy under the repo's
+    # default branch, whichever that is (service-desk, 2026-11-02), with that
+    # branch's tip as its head_sha. So the last release's deploy also matches
+    # this commit if dev had already reached it when that deploy started: only
+    # a run made since this commit's CI on main began can prove this release.
+    watch deploy.yml "&created=%3E%3D$created" "proof: deploy"
   else
     ok "proof: no deploy.yml, so ci on main is the whole release"
   fi

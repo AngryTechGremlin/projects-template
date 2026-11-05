@@ -67,13 +67,17 @@ if u.hostname == "logs.example.invalid":
 if not state.get("token_ok", True):
     code, body = 401, {"message": "Bad credentials"}
 elif m := re.fullmatch(r"/repos/acme/widget/actions/workflows/(\w+)\.yml/runs", p):
-    c = state.get(m[1], {}).get(q.get("branch"))
+    # A deploy is asked for by commit alone: GitHub files it under the default
+    # branch, which is what a key of "dev" in the state stands for.
+    wf = state.get(m[1], {})
+    c = wf.get(q["branch"]) if "branch" in q else next(iter(wf.values()), None)
+    when = state.get("created", {}).get(m[1], "2026-01-02T00:00:00Z")
     runs = []
-    if c:
+    if c and when >= q.get("created", "").removeprefix(">="):
         done = c not in ("queued", "in_progress")
         rid = {"ci": 100, "deploy": 200}[m[1]] + len(q.get("branch", ""))
         runs = [{"id": rid, "status": "completed" if done else c, "conclusion": c if done else None,
-                 "html_url": runs_url + str(rid)}]
+                 "created_at": when, "html_url": runs_url + str(rid)}]
     body = {"total_count": len(runs), "workflow_runs": runs}
 elif re.fullmatch(r"/repos/acme/widget/actions/runs/\d+/jobs", p):
     body = {"jobs": [{"id": 7, "name": "hygiene", "conclusion": "failure",
@@ -249,6 +253,16 @@ expect 1 'STOP proof: deploy: failure' 'proof: a failed deploy is a failed relea
 check "  ...after main moved" test "$(origin_main)" = "$sha"
 gh_state '{"ci": {"dev": "success", "main": "success"}, "deploy": {"main": "success"}}'
 expect 0 'ok   proof: deploy \(https://github.com/acme/widget/actions/runs/' 'proof: a green deploy, with its link'
+
+fixture deploy
+gh_state '{"ci": {"dev": "success", "main": "success"}, "deploy": {"dev": "failure"}}'
+expect 1 'STOP proof: deploy: failure' 'proof: a repo whose default branch is dev still sees its red deploy'
+gh_state '{"ci": {"dev": "success", "main": "success"}, "deploy": {"dev": "success"}}'
+expect 0 'ok   proof: deploy' 'proof: ...and its green one'
+
+fixture deploy
+gh_state '{"ci": {"dev": "success", "main": "success"}, "deploy": {"dev": "success"}, "created": {"deploy": "2026-01-01T00:00:00Z"}}'
+expect 1 'proof: deploy: no run for' "proof: a green deploy from before this commit's ci on main proves nothing"
 
 fixture
 gh_state '{"ci": {"dev": "success", "main": "failure"}}'
