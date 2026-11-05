@@ -158,7 +158,7 @@ fi
 # for prod the one config.sh saves from this shell into .path.
 if [[ $mode == ci ]]; then
   svc_path=$(systemctl --user show-environment | sed -n 's/^PATH=//p')
-  tools=(git curl python3 node docker bwrap)
+  tools=(git curl python3 node docker)
 else
   svc_path=$PATH
   tools=(git curl rsync docker)

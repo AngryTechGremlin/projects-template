@@ -51,16 +51,10 @@ and adds only what is personal to this machine.
 - Files unrelated to this project never ride along in a commit.
 - Keep the repo **private** by default; anything describing homelab topology
   stays private permanently.
-- **The one exception: a public copy**, and only where a `PUBLISH` file exists
-  (`docs/publishing.md`). Only the files `PUBLISH` lists go out, only through
-  `scripts/mirror.sh`, and only on the owner's click (§5). A session never
-  pushes anywhere but origin (the hook refuses any other URL) and never adds a
-  public remote. **Never read the publish blocklist**
+- A session never pushes anywhere but origin (the hook refuses any other URL)
+  and never adds a public remote. **Never read the publish blocklist**
   (`~/.config/publish/blocklist`) unless the owner has asked this session to
-  build it (`docs/publishing.md`): a hit prints as `file:line` only, so open
-  that line, and if the problem is not plain, ask the owner. Never paste house
-  logs, hostnames, addresses or command output into a public issue or PR
-  reply: nothing checks what is typed there.
+  build it.
 
 ## 4. New endpoint bootstrap (agent-runnable)
 A working checkout is the clone **plus** the gitignored files git never carries.
@@ -100,12 +94,6 @@ rather than assume.
   identity GitHub picks (hallpass, 2026-10-27). A release that stops says why;
   fix that on `dev`, never around the script.
 
-**Publishing a public copy is not part of a release** (only where `PUBLISH`
-exists). A push to `main` publishes nothing: the owner reads the publish check
-job's list and clicks publish (Actions → publish → Run workflow, on `main`). A
-session never starts it — its token has no Actions write — and never reads a
-release approval as approval to publish.
-
 ## 6. Testing
 > TODO({{PROJECT}}): the one command that runs the suite, and what each tier
 > covers. Tests must not need a secret, a real device, or the LAN.
@@ -120,12 +108,6 @@ release approval as approval to publish.
 - CI runs on the house's own CI runner, never GitHub's cloud runners
   (`docs/ci-runner.md`): "does it build, parse and pass unit tests", plus the
   house checks. No secrets, no real devices, nothing that reaches the house.
-- A public copy has no CI of its own: the public repo has no workflows and
-  never reaches a house runner. Outside PRs are tested here, privately.
-- **Code from outside the house** (a PR taken in with `scripts/mirror.sh pr
-  <N>`) runs only inside `scripts/sandbox.sh` — no network, no home folder, no
-  docker socket — in CI and in a session alike, and only after the owner has
-  read the diff.
 - Anything that touches real hardware is on-demand only, gated on an identifier
   in a gitignored file, and never runs in CI.
 

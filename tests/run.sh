@@ -5,20 +5,17 @@
 #   tests/run.sh
 #
 #   1. tests/guard.sh         the deploy guard, against fake workspaces
-#   2. tests/mirror-gates.sh  the public mirror's gates, on a throwaway fixture
-#   3. tests/runner-kit.sh    runners/add-runner.sh refuses what it must, offline
-#      tests/publish-key.sh   publish/add-public-key.sh makes one private key, offline
+#   2. tests/runner-kit.sh    runners/add-runner.sh refuses what it must, offline
 #      tests/refresh-all.sh   refresh-all.sh updates a repo's dev, never its checkout
 #      tests/release.sh       scripts/release.sh's gates, against a fake GitHub API
-#   4. the scaffold smoke     new-project.sh as a person runs it (new with
-#      test, below            --publish, --adopt, --adopt --publish, --adopt
-#                             --refresh) into a scratch folder, then the
+#   3. the scaffold smoke     new-project.sh as a person runs it (new, --adopt,
+#      test, below            --adopt --refresh) into a scratch folder, then the
 #                             scaffold's own scripts/check.sh and pre-push hook
 #                             on what it made. That is where the skeleton's
 #                             workflows are linted: rendered, as a repo gets them.
 #
-# Needs git, docker (scripts/check.sh runs each linter in a pinned image) and
-# bwrap (scripts/sandbox.sh). It touches no real repo, remote or token.
+# Needs git and docker (scripts/check.sh runs each linter in a pinned image).
+# It touches no real repo, remote or token.
 #
 # Exit 0 = all passed, 1 = a test failed, 2 = a suite could not run.
 set -euo pipefail
@@ -26,7 +23,7 @@ set -euo pipefail
 tpl=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 
 missing=()
-for tool in git docker bwrap; do command -v "$tool" >/dev/null || missing+=("$tool"); done
+for tool in git docker; do command -v "$tool" >/dev/null || missing+=("$tool"); done
 (( ${#missing[@]} == 0 )) \
   || { echo "tests: missing ${missing[*]}; a suite that cannot run is not a pass" >&2; exit 2; }
 
@@ -124,30 +121,23 @@ smoke() (
     for l; do grep -qxF -- "$l" "$f" || { echo "no line '$l' in $f" >&2; return 1; }; done
   }
   no_branch() { ! git --git-dir="$1" show-ref -q --verify "refs/heads/$2"; }
+  lacks() { ! grep -q -- "$1" "$2"; }
   refreshed_nothing() { # <refresh output> <managed file count>
     [[ $(grep -c '^  unchanged: ' "$1") == "$2" ]] && ! grep -q 'refreshed: ' "$1"
   }
   commit() { git -C "$1" add -A && git -C "$1" commit -q -m "$2"; }
-  # publish.yml's hash lines, checked against the scaffold's own scripts.
-  pins_match() { # <repo>
-    awk '/sha256sum --check/ { f = 1; next } f && /EOF/ { f = 0 } f { sub(/^ +/, ""); print }' \
-      "$1/.github/workflows/publish.yml" | sort -u >"$t/pins"
-    [[ $(wc -l <"$t/pins") == 2 ]] || { echo "want 2 pinned scripts in publish.yml" >&2; return 1; }
-    (cd "$1" && sha256sum --check --strict --quiet "$t/pins")
-  }
 
-  # Everything a new scaffold with the mirror kit is meant to carry, and the
-  # part of it a commit must never carry.
+  # Everything a new scaffold is meant to carry, the part of it a commit must
+  # never carry, and the mirror kit, which only book-companion has.
   ships=(agent.md CLAUDE.md README.md .env.example .gitignore .mcp.json .vscode/mcp.json
     .claude/settings.json docs/adr/README.md docs/adr/0001-scaffolded-from-the-projects-template.md
-    docs/ci-runner.md docs/publishing.md PUBLISH .githooks/pre-push
-    .github/workflows/ci.yml .github/workflows/weekly.yml .github/workflows/publish.yml
+    docs/ci-runner.md .githooks/pre-push
+    .github/workflows/ci.yml .github/workflows/weekly.yml
     scripts/pii-scan.sh scripts/pii-scan.exclude scripts/check.sh scripts/check-tools.env
-    scripts/git-credential-github.sh scripts/release.sh scripts/mirror.sh scripts/sandbox.sh mcp/README.md
-    mcp/package.json)
+    scripts/git-credential-github.sh scripts/release.sh mcp/README.md mcp/package.json)
   private=(.env pi.md mcp/.env)
   execs=(.githooks/pre-push scripts/pii-scan.sh scripts/check.sh scripts/git-credential-github.sh
-    scripts/release.sh scripts/mirror.sh scripts/sandbox.sh)
+    scripts/release.sh)
   kit=(PUBLISH scripts/mirror.sh scripts/sandbox.sh .github/workflows/publish.yml docs/publishing.md)
 
   # A flag that would hand one repo another's token is gone. --dir keeps even
@@ -156,23 +146,21 @@ smoke() (
     "$np" gone --dir "$t/gone" --reuse-token
   check "  ...and nothing was made" test ! -e "$t/gone"
 
-  # --- new, with the mirror kit, so every skeleton workflow is rendered ---------
+  expect 2 'unknown option: --publish' '--publish is gone: the mirror kit is book-companion'"'"'s' \
+    "$np" gone --dir "$t/gone" --publish
+  check "  ...and nothing was made" test ! -e "$t/gone"
+
+  # --- new, so every skeleton workflow is rendered -------------------------------
   s=$t/smoke
-  expect 0 'git switch -c dev' 'new smoke --publish' "$np" smoke --dir "$s" --publish --no-build
+  expect 0 'git switch -c dev' 'new smoke' "$np" smoke --dir "$s" --no-build
   check "new: no {{PLACEHOLDER}} left" no_placeholders "$s"
   check "new: every skeleton file, and the gitignored trio" has_all "$s" "${ships[@]}" "${private[@]}"
   check "new: scripts and the hook are executable" all_exec "$s" "${execs[@]}"
   check "new: a repo on main, hooks from .githooks" \
     test "$(git -C "$s" symbolic-ref --short HEAD) $(git -C "$s" config core.hooksPath)" = "main .githooks"
-  check "new: PUBLISH publishes to techthatworks/smoke" \
-    test "$(git config --file "$s/PUBLISH" --get publish.repo)" = techthatworks/smoke
+  check "new: no mirror kit" has_none "$s" "${kit[@]}"
   check "new: every job runs on smoke-ci and nowhere else" \
-    runs_on_only smoke-ci "$s"/.github/workflows/{ci,weekly,publish}.yml
-  check "new: publish.yml's hashes pin this mirror.sh and pii-scan.sh" pins_match "$s"
-  check "new: a publishing repo's ci.yml runs its tests in the sandbox, installs with no scripts" \
-    lines_in "$s/.github/workflows/ci.yml" \
-    '      #     scripts/sandbox.sh python -m unittest discover -s tests -v' \
-    '      #     npm ci --ignore-scripts            # fails if package-lock.json and package.json disagree'
+    runs_on_only smoke-ci "$s"/.github/workflows/{ci,weekly}.yml
   expect 0 '^pii-scan: clean' "new: the scaffold's own scripts/pii-scan.sh is clean" in_dir "$s" scripts/pii-scan.sh
   git -C "$s" add -A
   check "new: .env, pi.md and mcp/.env stay ignored" ignored_all "$s" "${private[@]}"
@@ -182,9 +170,9 @@ smoke() (
   git -C "$s" commit -q -m 'chore: scaffold from the Projects template' \
     -m 'Co-Authored-By: Claude <noreply@anthropic.com>'
   git -C "$s" switch -q -c dev
-  expect 0 'ok  actionlint \(3 workflows\)' 'new: scripts/check.sh fast passes and lints all 3 workflows' \
+  expect 0 'ok  actionlint \(2 workflows\)' 'new: scripts/check.sh fast passes and lints both workflows' \
     in_dir "$s" scripts/check.sh fast
-  check "  ...and zizmor read all 3" grep -qE 'ok  zizmor \(3 files\)' "$out"
+  check "  ...and zizmor read both" grep -qE 'ok  zizmor \(2 files\)' "$out"
 
   # --- the pre-push hook, on real pushes to local bare repos --------------------
   git init -q --bare "$t/origin.git"
@@ -258,19 +246,43 @@ smoke() (
     lines_in "$a/.github/workflows/ci.yml" '      #     python -m unittest discover -s tests -v'
   expect 0 'ok  actionlint \(2 workflows\)' 'adopt: scripts/check.sh fast passes' in_dir "$a" scripts/check.sh fast
 
-  expect 0 'publishes to techthatworks/adopted' 'adopt --publish: adds the mirror kit' \
-    "$np" --adopt "$a" --publish --no-build
-  check "adopt --publish: the five kit files" has_all "$a" "${kit[@]}"
-  check "adopt --publish: no {{PLACEHOLDER}} left" no_placeholders "$a"
-  commit "$a" 'chore: add the public-mirror kit'
-
-  expect 0 'unchanged: docs/publishing\.md' 'refresh: straight after adopting' "$np" --adopt "$a" --refresh --no-build
-  check "refresh: all 14 managed files (6 of them the MCP kit's) unchanged, none rewritten" refreshed_nothing "$out" 14
+  expect 0 'unchanged: docs/ci-runner\.md' 'refresh: straight after adopting' "$np" --adopt "$a" --refresh --no-build
+  check "refresh: all 11 managed files (6 of them the MCP kit's) unchanged, none rewritten" refreshed_nothing "$out" 11
   check "refresh: the tree is still clean" test -z "$(git -C "$a" status --porcelain)"
   printf '# a local edit\n' >>"$a/scripts/check.sh"
   expect 2 'refusing --refresh' 'refresh: refused while a managed file has uncommitted edits' \
     "$np" --adopt "$a" --refresh --no-build
   check "  ...and the edit is still there" grep -qx '# a local edit' "$a/scripts/check.sh"
+  git -C "$a" checkout -q -- scripts/check.sh
+
+  # --- a repo with a public mirror keeps it --------------------------------------
+  # The kit is its own now: a refresh leaves it alone, the hook still refuses
+  # what PUBLISH names, and a changed PII scan, which publish.yml pins, says so.
+  printf '[publish]\n\trepo = SomeOrg/adopted\n\tpath = README.md\n' >"$a/PUBLISH"
+  printf '# the repo'"'"'s own publisher\n' >"$a/scripts/mirror.sh"
+  printf '# the repo'"'"'s own publish job\n' >"$a/.github/workflows/publish.yml"
+  printf '# an edit a refresh will undo\n' >>"$a/scripts/pii-scan.sh"
+  commit "$a" 'chore: a mirror of its own'
+  expect 0 'replaces the old one' 'refresh: a changed PII scan prints the pin to paste' "$np" --adopt "$a" --refresh --no-build
+  check "  ...the line is the scan's new hash" grep -qF "$(cd "$a" && sha256sum scripts/pii-scan.sh)" "$out"
+  check "  ...its publisher is untouched" grep -qx "# the repo's own publisher" "$a/scripts/mirror.sh"
+  check "  ...its publish job is untouched" grep -qx "# the repo's own publish job" "$a/.github/workflows/publish.yml"
+  check "  ...and no kit file came back" has_none "$a" scripts/sandbox.sh docs/publishing.md
+  expect 1 'the public side' 'push: origin pointed at the repo PUBLISH names is refused' \
+    in_dir "$a" bash -c 'git remote add origin https://github.com/SomeOrg/adopted.git && .githooks/pre-push origin https://github.com/SomeOrg/adopted.git'
+
+  # --- the PII scan'"'"'s public modes, which a mirror kit relies on -----------------
+  p=$t/public
+  git init -q "$p"
+  printf 'the printer is printer.lan\nour word is %s\n' 'zebrafish' >"$p/notes.md"
+  git -C "$p" add -A
+  expect 0 '^pii-scan: clean' 'pii-scan: a .lan name passes in a private repo' in_dir "$p" bash "$a/scripts/pii-scan.sh"
+  expect 1 'notes\.md' 'pii-scan: ...and is refused with PII_SCAN_PUBLIC=1' \
+    in_dir "$p" env PII_SCAN_PUBLIC=1 bash "$a/scripts/pii-scan.sh"
+  printf 'zebrafish\n' >"$t/blocklist"
+  expect 1 'notes\.md:2' 'pii-scan: PII_SCAN_BLOCKLIST says where a word is' \
+    in_dir "$p" env PII_SCAN_BLOCKLIST="$t/blocklist" bash "$a/scripts/pii-scan.sh"
+  check "  ...and never prints the word" lacks zebrafish "$out"
 
   printf '\nscaffold smoke\n'
   printf '  %s\n' "${rows[@]}"
@@ -300,9 +312,7 @@ suite() { # <name> <command...>
 }
 
 suite "deploy guard" bash "$tpl/tests/guard.sh"
-suite "mirror gates" bash "$tpl/tests/mirror-gates.sh"
 suite "runner kit" bash "$tpl/tests/runner-kit.sh"
-suite "publish key" bash "$tpl/tests/publish-key.sh"
 suite "refresh all" bash "$tpl/tests/refresh-all.sh"
 suite "release" bash "$tpl/tests/release.sh"
 suite "scaffold smoke" smoke

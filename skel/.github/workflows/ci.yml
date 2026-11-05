@@ -118,25 +118,20 @@ jobs:
           persist-credentials: false
 
       # TODO({{PROJECT}}): keep the stanza for this project's stack, delete the
-      # rest, and delete the no-op step below. In a repo that publishes, outside
-      # PRs land here, so every command that runs this repo's code goes through
-      # scripts/sandbox.sh, and the install step, which needs the network and
-      # so cannot, runs no package's scripts (docs/publishing.md). A sandbox
-      # call keeps none of its writes: build and test in the same one.
+      # rest, and delete the no-op step below.
       #
       # - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
       #   with: { python-version: "3.12" }
       # - name: compile and test
       #   run: |
       #     set -euo pipefail
-      #     # A fresh venv per run, in the checkout (checkout's clean removes it,
-      #     # and sandbox.sh sees it): the house runner keeps setup-python's
-      #     # interpreter between runs, and a leftover package must never be
-      #     # what makes a test pass.
+      #     # A fresh venv per run, in the checkout (checkout's clean removes
+      #     # it): the house runner keeps setup-python's interpreter between
+      #     # runs, and a leftover package must never be what makes a test pass.
       #     python -m venv .venv && . .venv/bin/activate
       #     pip install -q -r requirements.txt
       #     python -m compileall -q .     # parses every file, runs none
-      #     {{SANDBOX}}python -m unittest discover -s tests -v
+      #     python -m unittest discover -s tests -v
       #
       # - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
       #   # No GitHub cache: v7 turns one on by itself once package.json names
@@ -145,8 +140,8 @@ jobs:
       # - name: build and test
       #   run: |
       #     set -euo pipefail
-      #     npm ci{{NPM_CI_FLAGS}}            # fails if package-lock.json and package.json disagree
-      #     {{SANDBOX}}sh -c 'npm run build --if-present && npm test --if-present'
+      #     npm ci            # fails if package-lock.json and package.json disagree
+      #     npm run build --if-present && npm test --if-present
 
       - name: no build configured yet
         run: |

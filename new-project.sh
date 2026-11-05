@@ -8,13 +8,9 @@ SKEL="$TEMPLATE_DIR/skel"
 PROJECTS_DIR=$(dirname -- "$TEMPLATE_DIR")
 
 owner=${GITHUB_OWNER:-AngryTechGremlin}
-# The org a public mirror publishes to. Only --publish uses it; the default
-# is filled in below, once an adopted repo's own PUBLISH has had its say.
-public_owner=${PUBLIC_OWNER:-}
 target=""
 adopt=0
 refresh=0
-publish=0
 with_mcp=1
 build_mcp=1
 dry=0
@@ -36,15 +32,10 @@ options:
   --adopt [PATH]    add only the MISSING shared tooling to an existing repo;
                     never overwrites a file that is already there
   --refresh         with --adopt: overwrite the files the template manages
-                    (check and scan scripts, pre-push hook, docs/ci-runner.md,
-                    the mirror's scripts) and print each diff; print how the
-                    customized ones (ci.yml, agent.md, ...) differ, to port by
-                    hand. Refused while a managed file has uncommitted changes.
-  --publish         add the public-mirror kit (PUBLISH, scripts/mirror.sh,
-                    scripts/sandbox.sh, publish.yml, docs/publishing.md); a
-                    repo that already has a PUBLISH file counts as --publish
-  --public-owner NAME  GitHub org the mirror publishes to (default the org in
-                    an existing PUBLISH, else $PUBLIC_OWNER, else techthatworks)
+                    (check and scan scripts, pre-push hook, docs/ci-runner.md)
+                    and print each diff; print how the customized ones (ci.yml,
+                    agent.md, ...) differ, to port by hand. Refused while a
+                    managed file has uncommitted changes.
   --no-mcp          skip the MCP server and its wiring
   --no-build        copy mcp/ but skip npm install && npm run build
   --dry-run         print what would happen, change nothing
@@ -63,10 +54,6 @@ while (( $# )); do
     --adopt)        adopt=1; shift
                     if [[ ${1:-} && ${1:-} != -* ]]; then target=$1; shift; fi ;;
     --refresh)      refresh=1; shift ;;
-    # Opt-in because only selected repos publish, and an unused publisher in
-    # every repo is attack surface.
-    --publish)      publish=1; shift ;;
-    --public-owner) public_owner=${2:?--public-owner needs a name}; shift 2 ;;
     --no-mcp)       with_mcp=0; shift ;;
     --no-build)     build_mcp=0; shift ;;
     --dry-run)      dry=1; shift ;;
@@ -86,19 +73,6 @@ if (( adopt )); then
   name=$(basename -- "$target")
   # The folder name is filled into files with sed and becomes the runner label.
   [[ $name =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || die "folder name must be letters, digits, . _ -: $name"
-  # A repo with a PUBLISH file has opted in; its mirror kit is shared tooling.
-  if [[ -e $target/PUBLISH ]]; then
-    publish=1
-    # It has also chosen its org. Fill the kit in for that one, so a refresh
-    # never quietly points the mirror's files at the default instead.
-    chosen=$(git config --file "$target/PUBLISH" --get publish.repo 2>/dev/null) || chosen=""
-    chosen=${chosen%%/*}
-    if [[ -n $chosen ]]; then
-      [[ -z $public_owner || $public_owner == "$chosen" ]] \
-        || die "PUBLISH publishes to $chosen, not $public_owner"
-      public_owner=$chosen
-    fi
-  fi
 else
   [[ -n $name ]] || { usage >&2; exit 2; }
   [[ $name =~ ^[a-z0-9][a-z0-9._-]*$ ]] || die "name must be lowercase letters, digits, . _ -: $name"
@@ -109,29 +83,19 @@ else
   fi
 fi
 
-[[ -n $public_owner ]] || public_owner=techthatworks
-# Both end up in URLs and in sed replacements, so hold them to GitHub's alphabet.
+# It ends up in URLs and in sed replacements, so hold it to GitHub's alphabet.
 [[ $owner =~ ^[A-Za-z0-9][A-Za-z0-9-]*$ ]] || die "not a GitHub owner name: $owner"
-[[ $public_owner =~ ^[A-Za-z0-9][A-Za-z0-9-]*$ ]] || die "not a GitHub org name: $public_owner"
 
 project_env=$(printf '%s' "$name" | tr 'a-z.-' 'A-Z__')
 today=$(date +%F)
-# A repo that publishes takes outside PRs, so ci.yml's test commands run in
-# scripts/sandbox.sh and its install step runs no package's scripts (it needs
-# the network, so it cannot be sandboxed). Elsewhere both stay plain.
-sandbox="" npm_ci_flags=""
-if (( publish )); then sandbox="scripts/sandbox.sh " npm_ci_flags=" --ignore-scripts"; fi
 
 substitute() {
   local f=$1
   sed -i \
     -e "s|{{PROJECT_ENV}}|$project_env|g" \
     -e "s|{{PROJECT}}|$name|g" \
-    -e "s|{{PUBLIC_OWNER}}|$public_owner|g" \
     -e "s|{{OWNER}}|$owner|g" \
     -e "s|{{DATE}}|$today|g" \
-    -e "s|{{SANDBOX}}|$sandbox|g" \
-    -e "s|{{NPM_CI_FLAGS}}|$npm_ci_flags|g" \
     "$f"
 }
 
@@ -164,14 +128,6 @@ docs=(
   docs/adr/README.md
   docs/adr/0001-scaffolded-from-the-projects-template.md
 )
-# The public-mirror kit: --publish only (see the flag for why).
-publish_files=(
-  PUBLISH
-  scripts/mirror.sh
-  scripts/sandbox.sh
-  .github/workflows/publish.yml
-  docs/publishing.md
-)
 
 # For --refresh. Managed files belong to the template: no repo edits them, so
 # a refresh overwrites them. Customized ones are meant to be edited per repo,
@@ -192,10 +148,6 @@ customized=(
   README.md
   scripts/pii-scan.exclude
 )
-if (( publish )); then
-  managed+=(scripts/mirror.sh scripts/sandbox.sh docs/publishing.md)
-  customized+=(PUBLISH .github/workflows/publish.yml)
-fi
 # The MCP server's code and lockfile are the template's too (skel/mcp is the
 # canonical copy), so a dependency fix there reaches every repo on a refresh.
 # Its README names the repo, so it is the repo's.
@@ -211,7 +163,6 @@ pins_changed=0
 need=("${shared[@]}")
 if (( ! adopt )); then need+=("${docs[@]}"); fi
 if (( with_mcp )); then need+=("${mcp_files[@]}" mcp/README.md); fi
-if (( publish )); then need+=("${publish_files[@]}"); fi
 if (( refresh )); then need+=("${customized[@]}"); fi
 absent=()
 for f in "${need[@]}"; do [[ -e $SKEL/$f ]] || absent+=("$f"); done
@@ -274,7 +225,7 @@ refresh_one() { # overwrite a managed file with the template's, showing the chan
     printf '  %s: %s\n%s\n' "$( ((dry)) && echo 'would refresh' || echo 'refreshed')" "$rel" "$diff_out"
     quiet cp -- "$rendered" "$dst"
     [[ $rel != mcp/* ]] || mcp_changed=1
-    [[ $rel != scripts/mirror.sh && $rel != scripts/pii-scan.sh ]] || pins_changed=1
+    [[ $rel != scripts/pii-scan.sh ]] || pins_changed=1
   else
     printf '  unchanged: %s\n' "$rel"
   fi
@@ -302,7 +253,6 @@ else
   mode=creating
 fi
 printf '%s %s\n  at %s\n  owner %s\n' "$mode" "$name" "$target" "$owner"
-if (( publish )); then printf '  publishes to %s/%s\n' "$public_owner" "$name"; fi
 printf '\n'
 
 quiet mkdir -p -- "$target"
@@ -315,9 +265,6 @@ if (( adopt )); then
     for f in "${customized[@]}"; do compare_one "$f"; done
   fi
   for f in "${shared[@]}"; do copy_one "$f"; done
-  if (( publish )); then
-    for f in "${publish_files[@]}"; do copy_one "$f"; done
-  fi
   if (( with_mcp )); then
     for f in "${mcp_files[@]}"; do copy_one "$f"; done
     if [[ -d $target/mcp ]]; then
@@ -337,12 +284,6 @@ if (( adopt )); then
     printf '\n  note: no workflow runs scripts/check.sh full (it runs the PII scan too) — port the\n'
     printf '        hygiene job from %s/.github/workflows/ci.yml into ci.yml,\n' "$SKEL"
     printf '        its "house checks" step whole: it sets CHECK_RANGE for the event\n'
-  fi
-  if (( publish )) && [[ -f $target/.github/workflows/ci.yml ]] \
-     && ! grep -q 'scripts/sandbox.sh' "$target/.github/workflows/ci.yml"; then
-    printf '\n  note: this repo publishes, so outside PRs land here: run every ci.yml step that\n'
-    printf '        runs its code as scripts/sandbox.sh <command>, and install with no package\n'
-    printf '        scripts (npm ci --ignore-scripts). The check job in %s/.github/workflows/ci.yml shows how.\n' "$SKEL"
   fi
 
   # Make sure the ignore rules the tooling depends on are present.
@@ -373,9 +314,6 @@ if (( adopt )); then
 else
   for f in "${docs[@]}"; do copy_one "$f"; done
   for f in "${shared[@]}"; do copy_one "$f"; done
-  if (( publish )); then
-    for f in "${publish_files[@]}"; do copy_one "$f"; done
-  fi
   if (( with_mcp )); then
     for f in "${mcp_files[@]}"; do copy_one "$f"; done
     quiet mkdir -p -- "$target/mcp"
@@ -474,11 +412,12 @@ done. next:
   git status                   # then commit as: chore: refresh shared tooling from the template
 NEXT
   if (( pins_changed && ! dry )) && [[ -f $target/.github/workflows/publish.yml ]]; then
-    # publish.yml pins the publisher by hash, so a changed one is refused until
-    # a person updates the pins there: the edit that says "publish with this".
-    printf '\n  !! publish.yml pins the publisher by hash, and a refresh changed it. Until these lines\n'
-    printf '     replace the old ones (both jobs), the publish check fails:\n'
-    ( cd "$target" && sha256sum scripts/mirror.sh scripts/pii-scan.sh | sed 's/^/          /' )
+    # A repo with a public mirror pins its publisher by hash, and the PII scan
+    # is the part of it that comes from here. A changed one is refused until a
+    # person updates the pin there: the edit that says "publish with this".
+    printf '\n  !! publish.yml pins the publisher by hash, and a refresh changed it. Until this line\n'
+    printf '     replaces the old one (both jobs), the publish check fails:\n'
+    ( cd "$target" && sha256sum scripts/pii-scan.sh | sed 's/^/          /' )
   fi
   if (( mcp_changed )); then
     printf '  (cd mcp && npm ci --ignore-scripts && npm run build)   # the MCP server changed: rebuild it\n'
@@ -507,8 +446,5 @@ done. next:
   # ~/Projects/_template/README.md, "Putting a project on GitHub"
   git remote add origin https://github.com/$owner/$name.git && git push -u origin dev
 NEXT
-fi
-if (( publish )); then
-  printf '  # public mirror: list each public file in PUBLISH; docs/publishing.md has the rest\n'
 fi
 printf '\nrestart the agent session in %s so .mcp.json is picked up.\n' "$target"

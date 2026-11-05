@@ -25,13 +25,11 @@ A portable Model Context Protocol (MCP) server that allows AI agents to interact
   | Actions | Read-only | a session can see whether CI passed, and why not; `scripts/release.sh` waits on it |
 
   `search_code` works with this set. **Never Actions: Read and write:** it
-  would let a session start a workflow, and publishing a public copy is a
-  workflow only the owner starts. **Workflows stays at no access** on
+  would let a session start a workflow. **Workflows stays at no access** on
   purpose: a session can push code but cannot change CI or a deploy pipeline
   in `.github/workflows`; GitHub refuses that push until a person grants it.
   The one planned exception is a new repo's **first push**, which carries
-  `.github/workflows/` (`ci.yml`, `weekly.yml`, and `publish.yml` where the
-  repo publishes): grant Workflows *Read and write* for that push,
+  `.github/workflows/` (`ci.yml`, `weekly.yml`): grant Workflows *Read and write* for that push,
   then take it away (`~/Projects/_template/README.md`, "Putting a project on
   GitHub").
   Why not a classic `repo` token: a leaked one reaches every repo the account

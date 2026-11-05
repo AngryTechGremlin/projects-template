@@ -8,7 +8,6 @@ so a fix to the shared machinery is written in one place.
 ~/Projects/_template/new-project.sh my-thing          # -> ~/Projects/my-thing
 ~/Projects/_template/new-project.sh --adopt ~/Projects/existing             # add what's missing
 ~/Projects/_template/new-project.sh --adopt ~/Projects/existing --refresh   # bring the shared scripts up to date
-~/Projects/_template/new-project.sh my-thing --publish                      # also the public-mirror kit
 ```
 
 The leading underscore is deliberate: it sorts above the projects and marks
@@ -34,7 +33,6 @@ this directory as *not one of them*.
 | `mcp/` + `.mcp.json` + `.vscode/mcp.json` + `.claude/settings.json` | The lean 5-tool GitHub MCP server, project-scoped, token in `mcp/.env` only: a fine-grained token scoped to the one repo (permissions below). |
 | `docs/adr/` | ADR-lite. One screen per trade-off, superseded rather than rewritten. |
 | `.gitignore` | The PII trio, MCP build output, and a commented deny-all variant for repos that describe homelab topology. |
-| `PUBLISH`, `scripts/mirror.sh`, `scripts/sandbox.sh`, `.github/workflows/publish.yml`, `docs/publishing.md` | `--publish` only: the public-mirror kit (below). |
 
 Every generic decision the scaffold could not make for you is left as
 `TODO(<project>)`. `grep -rn 'TODO(<project>)' .` is the punch list.
@@ -156,8 +154,8 @@ Its last line counts the files it scanned once the exclude file has had its
 say, and none at all is exit 2, never "clean": a lone `*` in the exclude
 file cannot switch the scan off.
 
-Two stricter modes exist for a tree about to go public, and only
-`scripts/mirror.sh` needs them: `PII_SCAN_PUBLIC=1` drops the exclude file and
+Two stricter modes exist for a tree about to go public, and only a mirror kit
+needs them: `PII_SCAN_PUBLIC=1` drops the exclude file and
 the test and placeholder exemptions (a fixture in a private repo harms no
 one; published, it is just a leak) and adds shapes that only matter once
 public (CGNAT and private IPv6 addresses, `.lan`/`.local`/`.internal`/
@@ -187,8 +185,7 @@ since plain `--adopt` never overwrites. It splits the files in two:
 - **Managed** — overwritten with the template's copy, each with its diff
   printed: `scripts/pii-scan.sh`, `scripts/check.sh`,
   `scripts/check-tools.env`, `.githooks/pre-push`, `docs/ci-runner.md`, and
-  for a repo with the mirror kit `scripts/mirror.sh`, `scripts/sandbox.sh`,
-  `docs/publishing.md`, and the MCP server's `mcp/package.json`, lockfile,
+  the MCP server's `mcp/package.json`, lockfile,
   `tsconfig.json` and `src/` (so a dependency fix such as zod 3 to 4 reaches
   every repo; the refresh says to rebuild it). No repo edits these; a fix to
   one goes in the template. A repo-specific rule a managed file needs (a word
@@ -196,8 +193,7 @@ since plain `--adopt` never overwrites. It splits the files in two:
   never in the managed copy, which the next refresh overwrites.
 - **Customized** — never written; refresh prints how each differs from the
   template, to port by hand: `ci.yml`, `weekly.yml`, `agent.md`, `CLAUDE.md`,
-  `README.md`, `scripts/pii-scan.exclude`, and with the kit `PUBLISH` and
-  `publish.yml`. Workflows are here because each repo's `ci.yml` has its own
+  `README.md`, `scripts/pii-scan.exclude`. Workflows are here because each repo's `ci.yml` has its own
   `check` job, and because a workflow change needs the Workflows grant to
   push anyway.
 
@@ -233,8 +229,7 @@ placeholder (`--reuse-token`, which copied one, is gone).
    | Workflows | **Read and write only for a push that changes a workflow**, then back to No access | the first push carries `.github/workflows/`, and GitHub refuses a push that creates or changes a workflow file without it |
 
    **Never Actions: Read and write.** It would let a session start a
-   workflow, and publishing a public copy is a workflow the owner starts by
-   hand (`publish.yml`). Without Workflows, a session cannot rewrite one to
+   workflow. Without Workflows, a session cannot rewrite one to
    start itself either.
 3. Put it in `<project>/mcp/.env` as the one `GITHUB_PERSONAL_ACCESS_TOKEN=`
    line — no quotes, no second copy; the helper reads the value raw.
@@ -296,13 +291,6 @@ prints the one `sudo mkdir … && sudo chown …` line and stops, and once
 registered it prints the `sudo ./svc.sh install` line that installs the
 system service. Both stay the owner's steps.
 
-`publish/add-public-key.sh <repo>` is the public mirror's one-time link
-between a private repo and its public copy, run once per repo by the owner:
-it makes a deploy key for that repo alone and prints the two pastes (public
-half on the public repo, private half as the `PUBLIC_DEPLOY_KEY` secret), and
-`--done` proves GitHub took it before shredding the private half
-(`skel/docs/publishing.md`, "The deploy key").
-
 A deploy job runs on prod's runner, and its first step is the same line in
 every repo:
 
@@ -319,36 +307,23 @@ a guard on `RUNNER_NAME` would have to, and the repo part plus the trailing
 runner anywhere else refuses to deploy, and the first deploy proves the
 layout. `tests/guard.sh` checks it against fake workspaces.
 
-## A public copy, for the repos that want one: `--publish`
+## A public copy: book-companion's kit, not the template's
 
-A few repos may be worth publishing. Making a private repo public, or
-mirroring it, publishes all of its history; this publishes files instead.
-`--publish` (new, or with `--adopt`) adds the mirror kit, and each release can
-then put one fresh snapshot commit on `techthatworks/<name>` (`--public-owner`
-or `PUBLIC_OWNER` for another org):
+Making a private repo public, or mirroring it, publishes all of its history; a
+mirror kit publishes one reviewed snapshot of listed files instead. The kit
+(`PUBLISH`, `scripts/mirror.sh`, `scripts/sandbox.sh`, `publish.yml`,
+`docs/publishing.md`, its gates' tests, the deploy-key script) used to live
+here behind `--publish`. **It moved to book-companion on the owner's word of
+2026-11-05:** one repo used it, and it was 29% of the template's shell plus
+its largest test. The trade-off is that a second repo wanting a public copy
+copies the kit from book-companion, on the owner's word, instead of passing a
+flag.
 
-- `PUBLISH` lists the files that go out, one literal path per line. A file
-  goes public only when someone adds its line.
-- `scripts/mirror.sh` checks every gate — the strict scan, the owner's
-  blocklist of house words (`~/.config/publish/blocklist` on the CI box,
-  which no session ever reads), a hard deny list, no binaries, no history —
-  and builds the snapshot in a scratch repo that never holds a private object.
-- `publish.yml` previews on every push. Only the owner's click publishes
-  (Actions → publish → Run workflow, on `main`): a publish cannot be taken
-  back, and nothing protects `main` on a free private repo.
-- Outside PRs come back with `scripts/mirror.sh pr <N>`, and their code runs
-  only inside `scripts/sandbox.sh` (no network, no home folder, no docker
-  socket, no tokens, and a throwaway copy of the checkout): a `--publish`
-  scaffold's `ci.yml` runs its test commands that way. The public repo has
-  no workflows and never reaches a house runner.
-- `publish.yml` pins `scripts/mirror.sh` and `scripts/pii-scan.sh` by hash,
-  so a session's change to the publisher stops the job until the owner pastes
-  the new hashes; a refresh that changes either needs that edit too.
-
-It is opt-in because an unused publisher in every repo is attack surface.
-`skel/docs/publishing.md` has the gates, the owner's setup on GitHub and the
-first-publish checklist; `tests/mirror-gates.sh` proves the gates on a
-throwaway fixture.
+Two pieces stay here, because they guard every repo or are shared: the pre-push
+hook still refuses the public org and any repo a `PUBLISH` names, and
+`scripts/pii-scan.sh` keeps its public modes. A repo's `publish.yml` pins that
+scan by hash, so a refresh that changes it prints the line to paste, and until
+a person does the publish check fails.
 
 ## Releasing: `scripts/release.sh`
 
@@ -399,8 +374,8 @@ carried), runs `new-project.sh --adopt --refresh`, records the template commit
 in `.template-version`, runs `scripts/check.sh fast`, and pushes to `dev` with
 that repo's own token from its `mcp/.env`. The repo's CI tests it like any other
 push, and it reaches `main` at the repo's next release, on the owner's word.
-It never edits a file a repo customizes (workflows, `agent.md`, the README,
-`PUBLISH`): their drift is listed for a person to port, and so are
+It never edits a file a repo customizes (workflows, `agent.md`, the README):
+their drift is listed for a person to port, and so are
 `publish.yml`'s pins when the publisher changed. One line per repo; the full log
 is in `~/.local/state/projects-template/`.
 
@@ -436,19 +411,18 @@ pushing a change:
 
 ```bash
 scripts/check.sh fast   # what the hook runs
-tests/run.sh            # the deploy guard, the mirror gates, the kits, refresh-all, release, a scaffold smoke test
+tests/run.sh            # the deploy guard, the runner kit, refresh-all, release, a scaffold smoke test
 ```
 
 Its CI (`.github/workflows/ci.yml`, on the runner `projects-template-ci`) runs
 `scripts/check.sh full` and `tests/run.sh`. The smoke test scaffolds into a
-scratch folder (new with `--publish`, `--adopt`, `--adopt --refresh`), fails
+scratch folder (new, `--adopt`, `--adopt --refresh`), fails
 on any `{{PLACEHOLDER}}` left behind, and runs the scaffold's own
 `scripts/check.sh fast` and pre-push hook — which is where the skeleton's
 workflows are linted, as a project gets them.
 
 A pin bump (`skel/scripts/check-tools.env`, the runner version in
 `runners/add-runner.sh`, an action SHA in the skeleton's workflows) says how
-in the file. A change to `skel/scripts/mirror.sh` or `skel/scripts/pii-scan.sh`
-also changes the two hashes `skel/.github/workflows/publish.yml` pins them by;
-`tests/run.sh` fails until they match. It reaches existing repos through `--adopt --refresh`, one repo at
+in the file. A change to `skel/scripts/pii-scan.sh` also changes the hash
+book-companion's `publish.yml` pins it by. A change reaches existing repos through `--adopt --refresh`, one repo at
 a time, in that repo's own session.

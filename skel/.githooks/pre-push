@@ -3,8 +3,8 @@
 # Last line of defence before anything leaves the machine (agent.md §3).
 #
 # 1. Pushes go to origin and nowhere else. This repo's history is private for
-#    good: a public copy is a fresh snapshot built by scripts/mirror.sh, never
-#    a push from here, so any other URL is a mistake by construction.
+#    good: a public copy is a fresh snapshot built by a mirror kit, never a
+#    push from here, so any other URL is a mistake by construction.
 # 2. Never to the public side, even when origin itself points there: no repo
 #    in the public org, and not the repo PUBLISH names.
 # 3. scripts/check.sh fast, on exactly the commits being pushed: the PII scan,
@@ -21,18 +21,16 @@ if [[ -z $origin || $url != "$origin" ]]; then
   cat >&2 <<MSG
 pre-push: refusing to push to $(hide "$url")
   This repo's history is private and goes only to origin ($(hide "${origin:-none set}")).
-  Publishing is scripts/mirror.sh's job: it builds a reviewed snapshot, so
-  private history, messages and authors never reach another remote.
+  Publishing is a mirror kit's job: it builds a reviewed snapshot, so private
+  history, messages and authors never reach another remote.
 MSG
   exit 1
 fi
 
 # A session that set origin's URL (or only its pushurl) to the public repo
-# would pass the check above. The public side is the org the mirror kit was
-# made for, and whatever PUBLISH names, in the working tree or the commit.
-# (In the template's own checkout the org is an unfilled placeholder, which
-# matches no URL, so there only PUBLISH counts.)
-public=('{{PUBLIC_OWNER}}/')
+# would pass the check above. The public side is the house's public org, and
+# whatever PUBLISH names, in the working tree or the commit.
+public=('techthatworks/')
 for src in PUBLISH HEAD:PUBLISH; do
   if [[ $src == PUBLISH ]]; then
     r=$(git config --file PUBLISH --get-all publish.repo 2>/dev/null) || r=
@@ -50,7 +48,7 @@ for p in "${public[@]}"; do
     cat >&2 <<MSG
 pre-push: refusing to push to $(hide "$url")
   That is the public side ($p), and origin points at it. This repo's history
-  is private for good: only scripts/mirror.sh's snapshot goes public, from the
+  is private for good: only a mirror kit's snapshot goes public, from a
   publish job. Set origin back: git remote set-url origin <the private repo>,
   and git config --unset remote.origin.pushurl if one is set.
 MSG

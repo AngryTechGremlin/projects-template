@@ -28,8 +28,7 @@ cache, and is the same kind of Linux box that serves the house.
   house's box, but each step's output is uploaded to the run's log. Steps never
   print a key, an address or data — the same rule as tracked files.
 - **What the box needs on the runner's PATH:** docker (the runner's user able
-  to reach the daemon), git 2.40+, curl, python3, node 22, and bwrap 0.10+ (for
-  `scripts/sandbox.sh`). The checks' linters run as Docker images pinned in
+  to reach the daemon), git 2.40+, curl, python3 and node 22. The checks' linters run as Docker images pinned in
   `scripts/check-tools.env`, so they need docker, not an install of their own.
   Jobs get the PATH of the systemd user manager
   (`systemctl --user show-environment`), not your shell's;
@@ -154,9 +153,9 @@ and `sudo` groups. That is effectively root: a test that runs
 blocklist, and change other runners. That is acceptable only while every
 line the runner executes was written in the house.
 
-- **A repo that takes outside pull requests** (one with a public mirror,
-  `docs/publishing.md`) runs every CI step that executes repo code through
-  `scripts/sandbox.sh`: no network, an empty `$HOME`, `/run` and `/tmp`, no
+- **A repo that takes outside pull requests** (one with a public mirror, which
+  today is book-companion) runs every CI step that executes repo code through
+  its `scripts/sandbox.sh`: no network, an empty `$HOME`, `/run` and `/tmp`, no
   docker or lxd socket, no environment tokens, and a throwaway copy of the
   checkout, so nothing the code writes there outlives the call. A session
   never runs code from an imported PR outside it, either. The box needs
