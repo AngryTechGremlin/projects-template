@@ -59,6 +59,12 @@ same pinned tools, so a red CI run is never news.
 - **A check that did not run is not a pass.** Exit 0 clean, 1 a check found
   something, 2 setup (no docker, a missing pin or file, a bad range). Each
   failure prints the fix under it.
+- **No workflows needs a reason.** Every house repo has `ci.yml`, so a repo
+  with no workflows fails actionlint and zizmor, as a broken file list would.
+  A public repo has none on purpose (no house runner may serve it, and no cloud
+  runner either), and says so in a `NO-CI` file at its root whose text is the
+  reason; then both pass with "NO-CI says why". An empty `NO-CI` counts for
+  nothing, and a `NO-CI` beside workflows fails: one of them is wrong.
 - **Speed:** `fast` takes about 2 s once the images are pulled (about
   150 MB, once per box), so nobody is tempted to skip the hook.
 - **Which commits:** `CHECK_RANGE` (git rev-list arguments). The hook sets it

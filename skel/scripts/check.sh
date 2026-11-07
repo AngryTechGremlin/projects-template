@@ -210,12 +210,24 @@ check_gitleaks() {
 }
 
 mapfile -d '' workflows < <(files '.github/workflows/*.yml' '.github/workflows/*.yaml')
+# A public repo has no CI on purpose: no house runner may serve it (a fork's
+# pull request would run inside the house) and no cloud runner may either. It
+# says so in a NO-CI file at its root whose text is the reason; then "no
+# workflows" is the expected state, not a broken file list.
+mapfile -d '' no_ci < <(files NO-CI)
+if (( ${#no_ci[@]} )) && [[ ! -s NO-CI ]]; then no_ci=(); fi   # an empty NO-CI says nothing
 
 check_actionlint() {
-  # Every house repo has .github/workflows/ci.yml, so none found means the file
-  # list is broken, and a linter that examined nothing must not pass.
+  # Every house repo has .github/workflows/ci.yml unless NO-CI says why not, so
+  # none found otherwise means the file list is broken, and a linter that
+  # examined nothing must not pass.
+  if (( ${#no_ci[@]} && ${#workflows[@]} )); then
+    echo "NO-CI says this repo has no CI, yet it has $(count "${#workflows[@]}" workflow): delete one or the other"
+    return 1
+  fi
   if (( ${#workflows[@]} == 0 )); then
-    echo "found no workflows, yet every house repo has .github/workflows/ci.yml"
+    if (( ${#no_ci[@]} )); then note="no workflows: NO-CI says why"; return 0; fi
+    echo "found no workflows, yet every house repo has .github/workflows/ci.yml (a public repo says why it has none in NO-CI)"
     return 1
   fi
   local conf=()
@@ -236,6 +248,7 @@ check_zizmor() {
   local actions inputs
   mapfile -d '' actions < <(files ':(glob)**/action.yml' ':(glob)**/action.yaml')
   inputs=("${workflows[@]}" "${actions[@]}")
+  if (( ${#inputs[@]} == 0 && ${#no_ci[@]} )); then note="nothing to read: NO-CI says why"; return 0; fi
   (( ${#inputs[@]} )) || { echo "found no workflows or actions to read"; return 1; }
   note=$(count "${#inputs[@]}" file)
   box "$ZIZMOR_IMAGE" --offline --no-progress --color never -qq "${inputs[@]}" || verdict $?

@@ -225,6 +225,27 @@ smoke() (
   git -C "$s" switch -q dev
   git -C "$s" branch -q -D probe
 
+  # --- a public repo: no workflows on purpose, and NO-CI says why ----------------
+  git -C "$s" switch -q -c noci dev
+  git -C "$s" rm -q -r .github/workflows docs/ci-runner.md
+  commit "$s" 'chore: no CI, since the repo is public'
+  expect 1 'found no workflows' 'noci: no workflows and no NO-CI still fails' \
+    in_dir "$s" env CHECK_RANGE=dev..noci scripts/check.sh fast
+  : >"$s/NO-CI"
+  expect 1 'found no workflows' 'noci: an empty NO-CI says nothing' \
+    in_dir "$s" env CHECK_RANGE=dev..noci scripts/check.sh fast
+  printf 'Public: no house runner may serve it, and no cloud runner either.\n' >"$s/NO-CI"
+  commit "$s" 'docs: say why there is no CI'
+  expect 0 'ok  actionlint \(no workflows: NO-CI says why\)' 'noci: NO-CI and no workflows passes' \
+    in_dir "$s" env CHECK_RANGE=dev..noci scripts/check.sh fast
+  check "  ...and zizmor has nothing to read" grep -qE 'ok  zizmor \(nothing to read: NO-CI says why\)' "$out"
+  git -C "$s" checkout -q dev -- .github/workflows
+  expect 1 'NO-CI says this repo has no CI, yet it has 2 workflows' 'noci: NO-CI beside workflows fails' \
+    in_dir "$s" env CHECK_RANGE=dev..noci scripts/check.sh fast
+  git -C "$s" reset -q --hard
+  git -C "$s" switch -q dev
+  git -C "$s" branch -q -D noci
+
   # --- adopt an existing repo, then add the kit, then refresh --------------------
   a=$t/adopted
   git init -q "$a"
