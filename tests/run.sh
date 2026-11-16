@@ -210,6 +210,20 @@ smoke() (
   check "  ...the uncommitted .gitleaksignore is caught" grep -qE '^    \?\? \.gitleaksignore' "$out"
   rm -f -- "$s/.gitleaksignore"
   git -C "$s" reset -q --hard dev
+
+  # The house's own words are in no pattern: only the gitignored list knows
+  # them, and the scan of the messages ran in a throwaway repo without it, so a
+  # family name in a message was pushed (jellycaster, 2026-11-16).
+  printf 'zzyzxname\n' >"$s/scripts/pii-scan.local"
+  printf 'notes\n' >"$s/notes.md"
+  git -C "$s" add notes.md
+  git -C "$s" commit -q -m "docs: notes on why Zzyzxname's TV buffered"
+  expect 1 'FAIL commit messages' "check: a word from the house's own list in a commit message is refused" \
+    in_dir "$s" env CHECK_RANGE=dev..probe scripts/check.sh fast
+  if grep -qi zzyzxname "$out"; then fail "  ...where only: the word itself was printed"
+  else pass "  ...where only: the word itself is not printed"; fi
+  rm -f -- "$s/scripts/pii-scan.local"
+  git -C "$s" reset -q --hard dev
   # One .gitattributes line once made git call every file binary, blinding
   # both the PII scan and gitleaks. The token is built here.
   printf 'TOKEN = "%s"\n' "ghp_$(printf '%s' aB3dE6gH9jK2mN5pQ8sT1vW4yZ7bC0eF3hJ6)" >"$s/settings.py"

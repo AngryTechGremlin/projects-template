@@ -172,6 +172,15 @@ check_messages() {
   (( new )) || { note="no new commits"; return 0; }
   local d=$tmp/messages rec rc=0
   git init -q --template= "$d" || return 2
+  # The house's own words (pii-scan.local) are gitignored, so the throwaway repo
+  # had none: a family name in a message passed here while the same name in a
+  # file was refused (jellycaster, 2026-11-16). The list goes in with it,
+  # ignored there too, so the scan neither skips it nor reads it as a message.
+  if [[ -e $root/scripts/pii-scan.local ]]; then
+    mkdir -p "$d/scripts" "$d/.git/info" \
+      && cp -- "$root/scripts/pii-scan.local" "$d/scripts/pii-scan.local" \
+      && printf '/scripts/pii-scan.local\n' >"$d/.git/info/exclude" || return 2
+  fi
   while IFS= read -r -d '' rec; do
     printf '%s\n' "${rec#*$'\x1f'}" >"$d/${rec%%$'\x1f'*}"
   done < <(git log -z --format='%H%x1f%B' "${range[@]}")
